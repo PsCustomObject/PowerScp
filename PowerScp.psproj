@@ -1,0 +1,14 @@
+﻿<Project Synchronized="False" SyncFilter="*.ps1;*.psm1;*.psd1;*.ps1xml;*.psf;*.pss;*.xml;*.help.txt" AutoExportFunctions="True" AutoExportPS1XMLFiles="True">
+  <Version>2.1</Version>
+  <FileID>3c42657a-e9fa-4358-a934-170727493e6c</FileID>
+  <ProjectType>1</ProjectType>
+  <Folders>
+    <Folder>Public</Folder>
+  </Folders>
+  <Files>
+    <File Build="2">PowerScp.psd1</File>
+    <File Build="0" ExportFunctions="True">PowerScp.psm1</File>
+    <File Build="2" Shared="True" ReferenceFunction="Invoke-New-ScpSession_ps1" ExportFunctions="False">Public\New-ScpSession.ps1</File>
+  </Files>
+  <StartupScript>C:\Users\daniele.catanesi\OneDrive\GitHub\PowerScp\Test-Module.ps1</StartupScript>
+</Project>
