@@ -4,5 +4,7 @@
   <OpenFolders>
     <Folder>Public</Folder>
   </OpenFolders>
-  <OpenFiles />
+  <OpenFiles>
+    <File>Public\New-ScpSession.ps1</File>
+  </OpenFiles>
 </ProjectState>

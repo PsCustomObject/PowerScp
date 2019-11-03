@@ -1,4 +1,6 @@
-﻿<#
+﻿function New-ScpSession
+{
+<#
 	.SYNOPSIS
 		A brief description of the New-ScpSession function.
 	
@@ -65,6 +67,9 @@
 	.PARAMETER UserPassword
 		A string representing the password used to connect to the remote host.
 	
+	.PARAMETER SecurePassword
+		A description of the SecurePassword parameter.
+	
 	.PARAMETER PrivateKeyPath
 		A string representing the path to a file containing an SSH private key used for authentication with remote host.
 	
@@ -77,15 +82,16 @@
 	.NOTES
 		Additional information about the function.
 #>
-function New-ScpSession {
-	[CmdletBinding(DefaultParameterSetName = 'UserName Password')]
-	[OutputType([WinSCP.Session], ParameterSetName = 'UserName Password')]
+	
+	[CmdletBinding(DefaultParameterSetName = 'UsernamePassword')]
+	[OutputType([WinSCP.Session], ParameterSetName = 'UsernamePassword')]
 	[OutputType([WinSCP.Session], ParameterSetName = 'Credentials')]
+	[OutputType([WinSCP.Session], ParameterSetName = 'SecurePassword')]
 	[OutputType([WinSCP.Session])]
 	param
 	(
-		[Parameter(ParameterSetName = 'UserName Password',
-			Mandatory = $true)]
+		[Parameter(ParameterSetName = 'UsernamePassword',
+				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
 		[Alias('Host', 'HostName')]
 		[string]$RemoteHost,
@@ -111,29 +117,28 @@ function New-ScpSession {
 		[switch]$WebDavSecure,
 		[ValidateNotNullOrEmpty()]
 		[string]$WebDavRoot,
-		[Parameter(ParameterSetName = 'UserName Password',
-			Mandatory = $true)]
+		[Parameter(ParameterSetName = 'UsernamePassword',
+				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
 		[string]$UserName,
-		[Parameter(ParameterSetName = 'UserName Password',
-			Mandatory = $true)]
+		[Parameter(ParameterSetName = 'UsernamePassword',
+				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
-		[string]$UserPassword
+		[string]$UserPassword,
+		[Parameter(ParameterSetName = 'SecurePassword',
+				   Mandatory = $true)]
+		[securestring]$SecurePassword
 	)
 	
-	# TODO: Create parameter for custom DLL path
-	# TODO: Create parameter for custom exe path
-	# TODO: Create paramterset for secure password
-
 	# Add assembly
 	Add-Type -Path "$PSScriptRoot\..\lib\WinSCPnet.dll"
 	
 	# Instantiate Session Options hash
 	[hashtable]$sessionOptions = @{ }
-
+	
 	# Instantiate Session object hash
 	[hashtable]$sessionObject = @{ }
-
+	
 	# Create WinSCP.Session and WinSCP.SessionOptions Objects
 	$paramNewObject = @{
 		TypeName = 'WinSCP.Session'
@@ -143,8 +148,9 @@ function New-ScpSession {
 	$sessionObject = New-Object @paramNewObject
 	
 	# Get parameterset
-	switch ($PsCmdlet.ParameterSetName) {
-		'UserName Password' 
+	switch ($PsCmdlet.ParameterSetName)
+	{
+		'UsernamePassword'
 		{
 			# Add paramters to object
 			$sessionOptions.Add('UserName', $UserName)
@@ -152,26 +158,54 @@ function New-ScpSession {
 			
 			break
 		}
-		'Credentials' 
+		
+		'Credentials'
 		{
-			
-			# Convert PSCredential Object to match names of the WinSCP.SessionOptions Object.
+			# Extract username and password and add to hash
 			$PSBoundParameters.Add('UserName', $Credential.UserName)
 			$PSBoundParameters.Add('SecurePassword', $Credential.Password)
 			
-			#TODO: Place script here
 			break
 		}
+		'SecurePassword'
+		{
+			
+		}
 	}
-
-	switch ($PSBoundParameters.Keys) {
-		'NoSshKeyCheck' 
+	
+	switch ($PSBoundParameters.Keys)
+	{
+		'NoSshKeyCheck'
 		{
 			# Add to options hash
 			$sessionOptions.Add('GiveUpSecurityAndAcceptAnySshHostKey', $true)
 		}
+		'NoTlsCheck'
+		{
+			# Add to options hash
+			$sessionOptions.Add('GiveUpSecurityAndAcceptAnyTlsHostCertificate', $true)
+		}
+		'SshKeyPath'
+		{
+			# Add to options hash
+			$sessionOptions.Add('GiveUpSecurityAndAcceptAnyTlsHostCertificate', $true)
+		}
+		'WebDavSecure'
+		{
+			# Add to options hash
+			$sessionOptions.Add('WebdavSecure', $true)
+		}
 	}
+	
+	# Add options with default values
+	$sessionOptions.Add('PortNumber', $ServerPort)
+	$sessionOptions.Add('Timeout', $SessionTimeout)
+	
+	# Create session options object
+	$paramNewObject = @{
+		TypeName = 'WinSCP.SessionOptions'
+		Property = $sessionOptions
+	}
+	
+	$scpSessionOptions = New-Object @paramNewObject
 }
-
-
-New-ScpSession
