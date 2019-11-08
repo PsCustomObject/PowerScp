@@ -6,5 +6,7 @@
   </OpenFolders>
   <OpenFiles>
     <File>Public\New-ScpSession.ps1</File>
+    <File>PowerScp.psm1</File>
+    <File>PowerScp.psd1</File>
   </OpenFiles>
 </ProjectState>
