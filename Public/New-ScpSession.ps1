@@ -196,8 +196,8 @@
 	)
 	
 	# Add assembly
-	Add-Type -Path "$PSScriptRoot\..\lib\WinSCPnet.dll"
-	
+	#Add-Type -Path "$PSScriptRoot\..\lib\WinSCPnet.dll"
+	Add-Type -Path "$PSScriptRoot\lib\WinSCPnet.dll"
 	# Create Session Options hash
 	[hashtable]$sessionOptions = @{ }
 	
@@ -218,7 +218,7 @@
 	}
 	
 	# Create Session Object
-	[WinSCP.SessionOption]$scpSessionOptions = New-Object @paramNewObject
+	[WinSCP.SessionOptions]$scpSessionOptions = New-Object @paramNewObject
 	
 	# Get parameterset
 	switch ($PsCmdlet.ParameterSetName)
@@ -235,8 +235,8 @@
 		'Credentials'
 		{
 			# Extract username and password and add to hash
-			$PSBoundParameters.Add('UserName', $Credentials.UserName)
-			$PSBoundParameters.Add('SecurePassword', $Credentials.Password)
+			$sessionOptions.Add('UserName', $Credentials.UserName)
+			$sessionOptions.Add('SecurePassword', $Credentials.Password)
 			
 			break
 		}
