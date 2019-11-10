@@ -196,29 +196,14 @@
 	)
 	
 	# Add assembly
-	#Add-Type -Path "$PSScriptRoot\..\lib\WinSCPnet.dll"
 	Add-Type -Path "$PSScriptRoot\lib\WinSCPnet.dll"
+	
 	# Create Session Options hash
 	[hashtable]$sessionOptions = @{ }
 	
 	# Create Session Object hash
 	[hashtable]$sesionObjectParameters = @{ }
-	
-	# Create WinSCP.Session and WinSCP.SessionOptions Objects
-	$paramNewObject = @{
-		TypeName = 'WinSCP.Session'
-		Property = @{ ExecutablePath = "$PSScriptRoot\..\bin\winscp.exe" }
-	}
-	
-	[WinSCP.Session]$sessionObject = New-Object @paramNewObject
-	
-	# Create session options object
-	$paramNewObject = @{
-		TypeName = 'WinSCP.SessionOptions'
-	}
-	
-	# Create Session Object
-	[WinSCP.SessionOptions]$scpSessionOptions = New-Object @paramNewObject
+
 	
 	# Get parameterset
 	switch ($PsCmdlet.ParameterSetName)
@@ -242,139 +227,140 @@
 		}
 	}
 	
+	# Get cmdlet parameters
+	
+	foreach ($key in $PSBoundParameters.Keys)
+	{
+		switch ($key)
+		{
+			'NoSshKeyCheck'
+			{
+				# Skip host fingerprint check
+				$sessionOptions.Add('GiveUpSecurityAndAcceptAnySshHostKey', $true)
+				
+				break
+			}
+			'NoTlsCheck'
+			{
+				# Skip host TLS check
+				$sessionOptions.Add('GiveUpSecurityAndAcceptAnyTlsHostCertificate', $true)
+				
+				break
+			}
+			'SshKeyPath'
+			{
+				#TODO: Private Key can be empty - Handle this
+				# Check additional mandatory parameter is present
+				if ([string]::IsNullOrEmpty($SshKeyPassword) -eq $true)
+				{
+					throw 'Parameter -PrivateKeyPassphrase is mandatory with -SshPrivateKeyPath'
+					
+					return $null
+				}
+				else
+				{
+					# Specify SshKeyPath and password
+					$sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
+					$sessionOptions.Add('PrivateKeyPassphrase', $SshKeyPassword)
+				}
+				
+				break
+			}
+			'SshKeyPassword'
+			{
+				#TODO:  Implement Secure String version of this parameter
+				# Convert SSH password string to clear text
+				#[string]$sshPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SshKeyPassword))
+				
+				# Check additional mandatory parameter is present
+				if ([string]::IsNullOrEmpty($SshKeyPath) -eq $true)
+				{
+					throw 'Parameter -SshKeyPath is mandatory with -SshKeyPassword'
+					
+					return $null
+				}
+				else
+				{
+					# Specify SSH Key passphrase
+					$sessionOptions.Add('PrivateKeyPassphrase', $SshKeyPassword)
+					$sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
+				}
+				
+				break
+			}
+			'WebDavSecure'
+			{
+				if (($Protocol -ne 'Webdav') -or
+					($Protocol -ne 'S3'))
+				{
+					Write-Error -Message 'WebDavSecure can only specified with Protocol WebDav or S3'
+					
+					return $null
+				}
+				else
+				{
+					# Add to options hash
+					$sessionOptions.Add('WebdavSecure', $true)
+				}
+				
+				break
+			}
+			'WebDavRoot'
+			{
+				if (($Protocol -ne 'Webdav') -or
+					($Protocol -ne 'S3'))
+				{
+					Write-Error -Message 'WebDavSecure can only specified with Protocol WebDav or S3'
+					
+					return $null
+				}
+				else
+				{
+					# Add to options hash
+					$sessionOptions.Add('WebDavRoot', $true)
+				}
+				
+				break
+			}
+			'SessionLogPath'
+			{
+				$sesionObjectParameters.Add('SessionLogPath', $SessionLogPath)
+				
+				break
+			}
+			'DebugLogPath'
+			{
+				$sesionObjectParameters.Add('DebugLogPath', $DebugLogPath)
+				
+				break
+			}
+		}
+	}
+	
 	# Add mandatory parameters to Session Options
 	$sessionOptions.Add('HostName', $RemoteHost)
 	$sessionOptions.Add('PortNumber', $ServerPort)
 	$sessionOptions.Add('Timeout', $ConnectionTimeOut)
 	
-	# Get cmdlet parameters
-	switch ($PSBoundParameters.Keys)
-	{
-		'NoSshKeyCheck'
-		{
-			# Skip host fingerprint check
-			$sessionOptions.Add('GiveUpSecurityAndAcceptAnySshHostKey', $true)
-			
-			break
-		}
-		'NoTlsCheck'
-		{
-			# Skip host TLS check
-			$sessionOptions.Add('GiveUpSecurityAndAcceptAnyTlsHostCertificate', $true)
-			
-			break
-		}
-		'SshKeyPath'
-		{
-			#TODO: Private Key can be empty - Handle this
-			# Check additional mandatory parameter is present
-			if ([string]::IsNullOrEmpty($SshKeyPassword) -eq $true)
-			{				
-				throw 'Parameter -PrivateKeyPassphrase is mandatory with -SshPrivateKeyPath'
-				
-				return $null
-			}
-			else
-			{
-				# Specify SshKeyPath and password
-				$sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
-				$sessionOptions.Add('PrivateKeyPassphrase', $SshKeyPassword)
-			}
-			
-			break
-		}
-		'SshKeyPassword'
-		{
-			#TODO:  Implement Secure String version of this parameter
-			# Convert SSH password string to clear text
-			#[string]$sshPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SshKeyPassword))
-			
-			# Check additional mandatory parameter is present
-			if ([string]::IsNullOrEmpty($SshKeyPath) -eq $true)
-			{
-				throw 'Parameter -SshKeyPath is mandatory with -SshKeyPassword'
-				
-				return $null
-			}
-			else
-			{
-				# Specify SSH Key passphrase
-				$sessionOptions.Add('PrivateKeyPassphrase', $SshKeyPassword)
-				$sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
-			}
-			
-			break
-		}
-		'WebDavSecure'
-		{
-			if (($Protocol -ne 'Webdav') -or
-				($Protocol -ne 'S3'))
-			{
-				Write-Error -Message 'WebDavSecure can only specified with Protocol WebDav or S3'
-				
-				return $null
-			}
-			else
-			{
-				# Add to options hash
-				$sessionOptions.Add('WebdavSecure', $true)
-			}
-			
-			break
-		}
-		'WebDavRoot'
-		{
-			if (($Protocol -ne 'Webdav') -or
-				($Protocol -ne 'S3'))
-			{
-				Write-Error -Message 'WebDavSecure can only specified with Protocol WebDav or S3'
-				
-				return $null
-			}
-			else
-			{
-				# Add to options hash
-				$sessionOptions.Add('WebDavRoot', $true)
-			}
-			
-			break
-		}
-		'SessionLogPath'
-		{
-			$sesionObjectParameters.Add('SessionLogPath', $SessionLogPath)
-			
-			break
-		}
-		'DebugLogPath'
-		{
-			$sesionObjectParameters.Add('DebugLogPath', $DebugLogPath)
-			
-			break
-		}
+	# Add mandatory paramters to Session Object
+	$sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\bin\winscp.exe")
+
+	# Create session options object
+	$paramNewObject = @{
+		TypeName = 'WinSCP.SessionOptions'
+		Property = $sessionOptions
 	}
 	
-	# Configur session options
-	foreach ($option in $sessionOptions.GetEnumerator())
-	{
-		# Get values in hash
-		[string]$optionKey = $option.Key
-		[string]$optionValue = $option.Value
+	[WinSCP.SessionOptions]$scpSessionOptions = New-Object @paramNewObject
+	
+	# # Create Session Object
+	$paramNewObject = @{
+		TypeName = 'WinSCP.Session'
+		Property = $sesionObjectParameters
+	}
+	
+	[WinSCP.Session]$sessionObject = New-Object @paramNewObject
 		
-		# Add values SCP Session object
-		$scpSessionOptions.$optionKey = $optionValue
-	}
-	
-	# Configure session parameters
-	foreach ($parameter in $sesionObjectParameters)
-	{
-		# Get values in hash
-		[string]$parameterKey = $parameter.Key
-		[string]$parameterValue = $parameter.Value
-		
-		# Add values SCP Session object
-		$sessionObject.$parameterKey = $parameterValue
-	}
-	
 	try
 	{
 		# Open session
