@@ -2,13 +2,15 @@
 {
 <#
 	.SYNOPSIS
-		A brief description of the New-ScpSession function.
+		Will create a new WinSCP.Session object.
 	
 	.DESCRIPTION
-		A detailed description of the New-ScpSession function.
+		Function is used to create a new WinSCP.Session via one of the supported protocols.
 	
 	.PARAMETER RemoteHost
 		A string representing the remote host to connect to.
+		
+		Parameter is mandatory and cannot be omitted.
 	
 	.PARAMETER NoSshKeyCheck
 		When parameter is used will PowerScp will skip verification of remote host SSH key for example when connecting to a known host.
@@ -53,13 +55,13 @@
 		- Explicit
 	
 	.PARAMETER ConnectionTimeOut
-		A description of the ConnectionTimeOut parameter.
+		A timespan, in seconds, representing the connection timeout. If not specified will defaul to 15 seconds.
 	
 	.PARAMETER WebDavSecure
-		A description of the WebDavSecure parameter.
+		Use WebDAVS (WebDAV over TLS/SSL), instead of WebDAV.
 	
 	.PARAMETER WebDavRoot
-		A string representing the WebDAV root path.
+		A string representing the WebDAV root path. This will be deprecated in a future release.
 	
 	.PARAMETER UserName
 		A string representing the username that will be used to authenticate agains the remote host.
@@ -68,22 +70,28 @@
 		A string representing the password used to connect to the remote host.
 	
 	.PARAMETER SshHostKeyFingerprint
-		A description of the SshHostKeyFingerprint parameter.
+		A string representing ingerprint of SSH server host key (or several alternative fingerprints separated by semicolon).
+		
+		It makes WinSCP automatically accept host key with the fingerprint. Use SHA-256 fingerprint of the host key.
+		
+		Mandatory for SFTP/SCP protocol unless the -NoSshKeyCheck parameter is used.
 	
 	.PARAMETER Credentials
-		A description of the Credentials parameter.
+		A credential object to be used to authenticate against the remote host in place of the clear text Username and Password
 	
 	.PARAMETER SshKeyPassword
-		A description of the SshKeyPassword parameter.
+		Passphrase for encrypted private keys and client certificates. Must be specified when using -PrivateKeyPath parameter.
 	
 	.PARAMETER SessionLogPath
-		A string representing the path where session log should be written.
+		A string representing the path to store session log file to. Default null means no session log file is created.
 	
 	.PARAMETER DebugLevel
 		An integer representing verbosity of debug log. If not specified default to 0 which means no debug logging.
+		
+		Possible values are 0 (No logging), 1 (Medium logging) and 2 (Verbose logging).
 	
 	.PARAMETER DebugLogPath
-		A description of the DebugLogPath parameter.
+		A string representing path to store assembly debug log to. Default null means no debug log file is created.
 	
 	.PARAMETER ReconnectTime
 		Time, in seconds, to try reconnecting broken sessions. Default is 120 seconds.
@@ -98,7 +106,8 @@
 		WinSCP.Session
 	
 	.NOTES
-		Additional information about the function.
+		Function is intended as helper for other module's function creating the WinSCP.Session object used by all other
+		functions for donwload/upload/management of data on remote hosts.
 #>
 	
 	[CmdletBinding(DefaultParameterSetName = 'UsernamePassword')]
@@ -113,86 +122,106 @@
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
 		[Alias('Host', 'HostName')]
-		[string]$RemoteHost,
+		[string]
+		$RemoteHost,
 		[Parameter(ParameterSetName = 'Credentials',
 				   Mandatory = $false)]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[Alias('GiveUpSecurityAndAcceptAnySshHostKey', 'AnySshKey', 'SshCheck', 'AcceptAnySshKey')]
-		[switch]$NoSshKeyCheck,
+		[switch]
+		$NoSshKeyCheck,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[Alias('GiveUpSecurityAndAcceptAnyTlsHostCertificate', 'AnyTlsCertificte', 'AcceptAnyCertificate')]
-		[switch]$NoTlsCheck,
+		[switch]
+		$NoTlsCheck,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateRange(0, 65535)]
 		[Alias('Port', 'RemoteHostPort')]
-		[int]$ServerPort = 22,
+		[int]
+		$ServerPort = 22,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateScript({ Test-Path $_ })]
 		[ValidateNotNullOrEmpty()]
 		[Alias('SshPrivateKey', 'SshPrivateKeyPath', 'SsheKeyPath')]
-		[string]$SshKeyPath = $null,
+		[string]
+		$SshKeyPath = $null,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
 		[ValidateSet('Ftp', 'Scp', 'Webdav', 'S3', IgnoreCase = $true)]
 		[Alias('ConnectionProtocol')]
-		[WinSCP.Protocol]$Protocol,
+		[WinSCP.Protocol]
+		$Protocol,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[WinSCP.FtpMode]$FtpMode,
+		[WinSCP.FtpMode]
+		$FtpMode,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
 		[Alias('FtpSecureMode', 'SecureFtpMode')]
-		[WinSCP.FtpSecure]$FtpSecure,
+		[WinSCP.FtpSecure]
+		$FtpSecure,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[Timespan]$ConnectionTimeOut = (New-TimeSpan -Seconds 15),
+		[Timespan]
+		$ConnectionTimeOut = (New-TimeSpan -Seconds 15),
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[switch]$WebDavSecure,
+		[switch]
+		$WebDavSecure,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
 		[Alias('RootPath')]
-		[string]$WebDavRoot,
+		[string]
+		$WebDavRoot,
 		[Parameter(ParameterSetName = 'UsernamePassword',
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
-		[string]$UserName,
+		[string]
+		$UserName,
 		[Parameter(ParameterSetName = 'UsernamePassword',
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
-		[string]$UserPassword,
+		[string]
+		$UserPassword,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[string[]]$SshHostKeyFingerprint,
+		[string[]]
+		$SshHostKeyFingerprint,
 		[Parameter(ParameterSetName = 'Credentials',
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
-		[pscredential]$Credentials,
+		[pscredential]
+		$Credentials,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[string]$SshKeyPassword,
+		[string]
+		$SshKeyPassword,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
-		[string]$SessionLogPath = $null,
+		[string]
+		$SessionLogPath = $null,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateSet('0', '1', '2', IgnoreCase = $true)]
-		[int]$DebugLevel = 0,
+		[int]
+		$DebugLevel = 0,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
-		[string]$DebugLogPath,
+		[string]
+		$DebugLogPath,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
-		[timespan]$ReconnectTime = 120
+		[timespan]
+		$ReconnectTime = 120
 	)
 	
 	# Add assembly
@@ -203,7 +232,7 @@
 	
 	# Create Session Object hash
 	[hashtable]$sesionObjectParameters = @{ }
-
+	
 	
 	# Get parameterset
 	switch ($PsCmdlet.ParameterSetName)
@@ -288,6 +317,11 @@
 				
 				break
 			}
+			'SshHostKeyFingerprint'
+			{
+				$sessionOptions.Add('SshHostKeyFingerprint', $SshHostKeyFingerprint)
+			}
+			
 			'WebDavSecure'
 			{
 				if (($Protocol -ne 'Webdav') -or
@@ -344,7 +378,7 @@
 	
 	# Add mandatory paramters to Session Object
 	$sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\bin\winscp.exe")
-
+	
 	# Create session options object
 	$paramNewObject = @{
 		TypeName = 'WinSCP.SessionOptions'
@@ -360,7 +394,7 @@
 	}
 	
 	[WinSCP.Session]$sessionObject = New-Object @paramNewObject
-		
+	
 	try
 	{
 		# Open session
@@ -375,8 +409,8 @@
 		
 		Write-Error -Message $reportedException
 		
-		#TODO: Implement -FullOutput Switch to throw full exception 
-		
 		return $null
 	}
 }
+
+#$s = New-ScpSession -RemoteHost 'na-ftp.kavokerrgroup.com' -UserName 'wdtransf.prod@extranet.sybrondental.com' -UserPassword '59eFDCa530bff4Xxadc!!ec82cf5f1' -SshHostKeyFingerprint 'ssh-rsa 2048 r2tMgOigl/UXcifhfqlkBYm99UipTixyy6La89hCK6w='
