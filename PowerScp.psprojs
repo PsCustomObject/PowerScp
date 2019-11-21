@@ -3,9 +3,14 @@
   <FileID>3c42657a-e9fa-4358-a934-170727493e6c</FileID>
   <OpenFolders>
     <Folder>Public</Folder>
+    <Folder>Private</Folder>
   </OpenFolders>
   <OpenFiles>
     <File>Public\New-ScpSession.ps1</File>
     <File>PowerScp.psd1</File>
+    <File>Public\Test-ScpPath.ps1</File>
+    <File>Public\Close-ScpSession.ps1</File>
+    <File>PowerScp.psm1</File>
+    <File>Public\Get-HostFingerPrint.ps1</File>
   </OpenFiles>
 </ProjectState>

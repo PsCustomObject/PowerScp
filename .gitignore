@@ -2,3 +2,6 @@
 Public/New-ScpSession.TempPoint.ps1
 PowerScp.TempPoint.psm1
 *.psprojs
+*.psproj
+*.psprojs
+*.psprojs

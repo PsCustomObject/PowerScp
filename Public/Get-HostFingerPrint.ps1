@@ -1,5 +1,54 @@
 ﻿function Get-HostFingerPrint
 {
+	<#
+	.SYNOPSIS
+		Will retrieve fingerprint of a remote host
+	
+	.DESCRIPTION
+		Will retrieve fingerprint of a remote host so that is can be used in other cmdlets to open an WinSCP Session validating remote host identity.
+	
+	.PARAMETER RemoteHost
+		A string representing the host to connect to
+	
+	.PARAMETER Password
+		A string representing the password to use to connect to the remote host.
+	
+	.PARAMETER UserName
+		A string representing the username to use while opening connection to the remote host.
+	
+	.PARAMETER PortNumber
+		An integer representing the port used to establish the connection. 
+		
+		Will default to 21 if not specified.
+	
+	.PARAMETER ConnectionTimeOut
+		A timespan representing the timeout, in secods, before dropping connection. 
+		
+		If not specified it will default to 15 seconds.
+	
+	.PARAMETER Algorithm
+		Specifies the host fingerprint to retrive, possible values are:
+		
+		- SHA-256
+		- MD5
+	
+	.PARAMETER Protocol
+		A string representing the protocol to use to open connection possible values are:
+		
+		- Ftp
+		- Scp
+		- Webdav
+	
+	.EXAMPLE
+				PS C:\> Get-HostFingerPrint -RemoteHost 'Value1' -Password 'Value2' -UserName 'Value3'
+	
+	.OUTPUTS
+		string, string
+	
+	.NOTES
+		Additional information about the function.
+#>
+	
 	[CmdletBinding(DefaultParameterSetName = 'UserNamePassword')]
 	[OutputType([string], ParameterSetName = 'UserNamePassword')]
 	[OutputType([string], ParameterSetName = 'Credentials')]
@@ -11,6 +60,7 @@
 		[Parameter(ParameterSetName = 'UserNamePassword',
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
+		[Alias('Host', 'Server', 'RemoteServer')]
 		[string]$RemoteHost,
 		[Parameter(ParameterSetName = 'UserNamePassword',
 				   Mandatory = $true)]
@@ -29,11 +79,13 @@
 		[timespan]$ConnectionTimeOut = (New-TimeSpan -Seconds 15),
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UserNamePassword')]
-		[ValidateSet('SHA-256', 'MD5', IgnoreCase = $true)]
 		[ValidateNotNullOrEmpty()]
+		[ValidateSet('SHA-256', 'MD5', IgnoreCase = $true)]
 		[string]$Algorithm = 'SHA-256',
+		[Parameter(ParameterSetName = 'Credentials')]
+		[Parameter(ParameterSetName = 'UserNamePassword')]
 		[ValidateSet('Ftp', 'Scp', 'Webdav', IgnoreCase = $true)]
-		$Protocol
+		[string]$Protocol = 'Scp'
 	)
 	
 	# Add assembly
@@ -98,7 +150,7 @@
 	catch
 	{
 		# Save exception message
-		[string]$reportedException = $Error[0].Exception.Message
+		[string]$reportedException = $_.Exception.Message
 		
 		Write-Error -Message $reportedException
 		
@@ -109,5 +161,3 @@
 		$sessionObject.Dispose()
 	}
 }
-
-Get-HostFingerPrint -UserName 'wdtransf.prod@extranet.sybrondental.com' -Password 'wdtransf.prod@extranet.sybrondental.com' -RemoteHost 'na-ftp.kavokerrgroup.com'

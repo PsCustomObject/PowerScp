@@ -1,6 +1,6 @@
 ﻿function New-ScpSession
 {
-<#
+	<#
 	.SYNOPSIS
 		Will create a new WinSCP.Session object.
 	
@@ -96,6 +96,9 @@
 	.PARAMETER ReconnectTime
 		Time, in seconds, to try reconnecting broken sessions. Default is 120 seconds.
 	
+	.PARAMETER NoSSHKeyPassword
+		A description of the NoSSHKeyPassword parameter.
+	
 	.PARAMETER PrivateKeyPath
 		A string representing the path to a file containing an SSH private key used for authentication with remote host.
 	
@@ -110,7 +113,8 @@
 		functions for donwload/upload/management of data on remote hosts.
 #>
 	
-	[CmdletBinding(DefaultParameterSetName = 'UsernamePassword')]
+	[CmdletBinding(DefaultParameterSetName = 'UsernamePassword',
+				   HelpUri = 'https://github.com/PsCustomObject/PowerScp/wiki/New-ScpSession')]
 	[OutputType([WinSCP.Session], ParameterSetName = 'UsernamePassword')]
 	[OutputType([WinSCP.Session], ParameterSetName = 'Credentials')]
 	[OutputType([WinSCP.Session])]
@@ -122,110 +126,90 @@
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
 		[Alias('Host', 'HostName')]
-		[string]
-		$RemoteHost,
+		[string]$RemoteHost,
 		[Parameter(ParameterSetName = 'Credentials',
 				   Mandatory = $false)]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[Alias('GiveUpSecurityAndAcceptAnySshHostKey', 'AnySshKey', 'SshCheck', 'AcceptAnySshKey')]
-		[switch]
-		$NoSshKeyCheck,
+		[switch]$NoSshKeyCheck,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[Alias('GiveUpSecurityAndAcceptAnyTlsHostCertificate', 'AnyTlsCertificte', 'AcceptAnyCertificate')]
-		[switch]
-		$NoTlsCheck,
+		[switch]$NoTlsCheck,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateRange(0, 65535)]
 		[Alias('Port', 'RemoteHostPort')]
-		[int]
-		$ServerPort = 22,
+		[int]$ServerPort = 22,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateScript({ Test-Path $_ })]
 		[ValidateNotNullOrEmpty()]
 		[Alias('SshPrivateKey', 'SshPrivateKeyPath', 'SsheKeyPath')]
-		[string]
-		$SshKeyPath = $null,
+		[string]$SshKeyPath = $null,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
 		[ValidateSet('Ftp', 'Scp', 'Webdav', 'S3', IgnoreCase = $true)]
 		[Alias('ConnectionProtocol')]
-		[WinSCP.Protocol]
-		$Protocol,
+		[WinSCP.Protocol]$Protocol,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[WinSCP.FtpMode]
-		$FtpMode,
+		[WinSCP.FtpMode]$FtpMode,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
 		[Alias('FtpSecureMode', 'SecureFtpMode')]
-		[WinSCP.FtpSecure]
-		$FtpSecure,
+		[WinSCP.FtpSecure]$FtpSecure,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[Timespan]
-		$ConnectionTimeOut = (New-TimeSpan -Seconds 15),
+		[Timespan]$ConnectionTimeOut = (New-TimeSpan -Seconds 15),
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[switch]
-		$WebDavSecure,
+		[switch]$WebDavSecure,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
 		[Alias('RootPath')]
-		[string]
-		$WebDavRoot,
+		[string]$WebDavRoot,
 		[Parameter(ParameterSetName = 'UsernamePassword',
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
-		[string]
-		$UserName,
+		[string]$UserName,
 		[Parameter(ParameterSetName = 'UsernamePassword',
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
-		[string]
-		$UserPassword,
+		[string]$UserPassword,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[string[]]
-		$SshHostKeyFingerprint,
+		[string[]]$SshHostKeyFingerprint,
 		[Parameter(ParameterSetName = 'Credentials',
 				   Mandatory = $true)]
 		[ValidateNotNullOrEmpty()]
-		[pscredential]
-		$Credentials,
+		[pscredential]$Credentials,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
-		[string]
-		$SshKeyPassword,
+		[string]$SshKeyPassword,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
-		[string]
-		$SessionLogPath = $null,
+		[string]$SessionLogPath = $null,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateSet('0', '1', '2', IgnoreCase = $true)]
-		[int]
-		$DebugLevel = 0,
+		[int]$DebugLevel = 0,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
-		[string]
-		$DebugLogPath,
+		[string]$DebugLogPath,
 		[Parameter(ParameterSetName = 'Credentials')]
 		[Parameter(ParameterSetName = 'UsernamePassword')]
 		[ValidateNotNullOrEmpty()]
-		[timespan]
-		$ReconnectTime = 120
+		[timespan]$ReconnectTime = 120,
+		[Parameter(ParameterSetName = 'Credentials')]
+		[Parameter(ParameterSetName = 'UsernamePassword')]
+		[switch]$NoSSHKeyPassword
 	)
-	
-	# Add assembly
-	Add-Type -Path "$PSScriptRoot\lib\WinSCPnet.dll"
 	
 	# Create Session Options hash
 	[hashtable]$sessionOptions = @{ }
@@ -278,13 +262,18 @@
 			}
 			'SshKeyPath'
 			{
-				#TODO: Private Key can be empty - Handle this
 				# Check additional mandatory parameter is present
-				if ([string]::IsNullOrEmpty($SshKeyPassword) -eq $true)
+				if (([string]::IsNullOrEmpty($SshKeyPassword) -eq $true) -and
+					(-not $NoSSHKeyPassword))
 				{
 					throw 'Parameter -PrivateKeyPassphrase is mandatory with -SshPrivateKeyPath'
 					
 					return $null
+				}
+				elseif ($NoSSHKeyPassword -eq $true)
+				{
+					# Specify SshKeyPath
+					$sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
 				}
 				else
 				{
@@ -297,10 +286,6 @@
 			}
 			'SshKeyPassword'
 			{
-				#TODO:  Implement Secure String version of this parameter
-				# Convert SSH password string to clear text
-				#[string]$sshPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SshKeyPassword))
-				
 				# Check additional mandatory parameter is present
 				if ([string]::IsNullOrEmpty($SshKeyPath) -eq $true)
 				{
@@ -377,7 +362,7 @@
 	$sessionOptions.Add('Timeout', $ConnectionTimeOut)
 	
 	# Add mandatory paramters to Session Object
-	$sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\bin\winscp.exe")
+	$sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\..\bin\winscp.exe")
 	
 	# Create session options object
 	$paramNewObject = @{
@@ -387,7 +372,7 @@
 	
 	[WinSCP.SessionOptions]$scpSessionOptions = New-Object @paramNewObject
 	
-	# # Create Session Object
+	# Create Session Object
 	$paramNewObject = @{
 		TypeName = 'WinSCP.Session'
 		Property = $sesionObjectParameters
@@ -405,12 +390,10 @@
 	catch
 	{
 		# Save exception message
-		[string]$reportedException = $Error[0].Exception.Message
+		[string]$reportedException = $_.Exception.Message
 		
 		Write-Error -Message $reportedException
 		
 		return $null
 	}
 }
-
-#$s = New-ScpSession -RemoteHost 'na-ftp.kavokerrgroup.com' -UserName 'wdtransf.prod@extranet.sybrondental.com' -UserPassword '59eFDCa530bff4Xxadc!!ec82cf5f1' -SshHostKeyFingerprint 'ssh-rsa 2048 r2tMgOigl/UXcifhfqlkBYm99UipTixyy6La89hCK6w='

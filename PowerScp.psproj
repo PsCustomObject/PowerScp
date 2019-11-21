@@ -4,11 +4,16 @@
   <ProjectType>1</ProjectType>
   <Folders>
     <Folder>Public</Folder>
+    <Folder>Private</Folder>
   </Folders>
   <Files>
     <File Build="2">PowerScp.psd1</File>
     <File Build="0" ExportFunctions="True">PowerScp.psm1</File>
     <File Build="2" Shared="True" ReferenceFunction="Invoke-New-ScpSession_ps1" ExportFunctions="False">Public\New-ScpSession.ps1</File>
+    <File Build="2" Shared="True" ReferenceFunction="Invoke-Get-HostFingerPrint_ps1" ExportFunctions="False">Public\Get-HostFingerPrint.ps1</File>
+    <File Build="2" Shared="True" ReferenceFunction="Invoke-Test-ScpPath_ps1" ExportFunctions="False">Public\Test-ScpPath.ps1</File>
+    <File Build="2" Shared="True" ReferenceFunction="Invoke-Format-StringPath_ps1" ExportFunctions="False">Private\Format-StringPath.ps1</File>
+    <File Build="2" Shared="True" ReferenceFunction="Invoke-Remove-ScpSession_ps1" ExportFunctions="False">Public\Remove-ScpSession.ps1</File>
   </Files>
   <StartupScript>C:\Users\daniele.catanesi\OneDrive\GitHub\PowerScp\Test-Module.ps1</StartupScript>
 </Project>
