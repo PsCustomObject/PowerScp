@@ -6,3 +6,4 @@ PowerScp.TempPoint.psm1
 *.psprojs
 *.psprojs
 *.psprojs
+Test-Module.ps1
