@@ -9,8 +9,8 @@
     <File>Public\New-ScpSession.ps1</File>
     <File>PowerScp.psd1</File>
     <File>Public\Test-ScpPath.ps1</File>
-    <File>Public\Close-ScpSession.ps1</File>
     <File>PowerScp.psm1</File>
     <File>Public\Get-HostFingerPrint.ps1</File>
+    <File>Private\Format-StringPath.ps1</File>
   </OpenFiles>
 </ProjectState>
