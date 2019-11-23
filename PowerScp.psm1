@@ -6,7 +6,9 @@ $paramGetChildItem = @{
 }
 
 Get-ChildItem @paramGetChildItem |
-ForEach-Object { . $_.FullName }
+ForEach-Object {
+	. $_.FullName
+}
 
 # Load assembly
 Add-Type -Path "$PSScriptRoot\lib\WinSCPnet.dll"

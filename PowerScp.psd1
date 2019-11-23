@@ -1,19 +1,4 @@
-﻿<#	
-	===========================================================================
-	 Created with: 	SAPIEN Technologies, Inc., PowerShell Studio 2019 v5.6.166
-	 Created on:   	09.08.2019 21:50
-	 Created by:   	Daniele Catanesi
-	 Organization: 	Danaher Dental Platform
-	 Filename:     	PowerScp.psd1
-	 -------------------------------------------------------------------------
-	 Module Manifest
-	-------------------------------------------------------------------------
-	 Module Name: PowerScp
-	===========================================================================
-#>
-
-
-@{
+﻿@{
 	
 	# Script module or binary module file associated with this manifest
 	RootModule = 'PowerScp.psm1'
@@ -25,16 +10,16 @@
 	GUID = '3c42657a-e9fa-4358-a934-170727493e6c'
 	
 	# Author of this module
-	Author = 'Daniele Catanesi'
+	Author = 'PsCustomObject - Daniele Catanesi'
 	
 	# Company or vendor of this module
-	CompanyName = 'Danaher Dental Platform'
+	CompanyName = 'https://PsCustomObject.github.io'
 	
 	# Copyright statement for this module
 	Copyright = '(c) 2019. All rights reserved.'
 	
 	# Description of the functionality provided by this module
-	Description = 'Module description'
+	Description = 'PowerShell module using WinSCP assembly to support transfer and sessions for protocols like SFTP, S3, FTP and WebDav from within PowerShell'
 	
 	# Minimum version of the Windows PowerShell engine required by this module
 	PowerShellVersion = '3.0'
@@ -78,7 +63,7 @@
 	NestedModules = @()
 	
 	# Functions to export from this module
-	FunctionsToExport = '*' #For performance, list functions explicitly
+	FunctionsToExport = @() #For performance, list functions explicitly
 	
 	# Cmdlets to export from this module
 	CmdletsToExport = '*' 
