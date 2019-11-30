@@ -63,7 +63,7 @@
 	NestedModules = @()
 	
 	# Functions to export from this module
-	FunctionsToExport = @() #For performance, list functions explicitly
+	FunctionsToExport = '*' #@() #For performance, list functions explicitly
 	
 	# Cmdlets to export from this module
 	CmdletsToExport = '*' 
@@ -72,7 +72,7 @@
 	VariablesToExport = '*'
 	
 	# Aliases to export from this module
-	AliasesToExport = '*' #For performance, list alias explicitly
+	AliasesToExport = '*' # For dev purposes then all functions will be listed
 	
 	# DSC class resources to export from this module.
 	#DSCResourcesToExport = ''

@@ -1,11 +1,6 @@
-*tmpPoint*
-Public/New-ScpSession.TempPoint.ps1
-PowerScp.TempPoint.psm1
-*.psprojs
-*.psproj
-*.psprojs
-*.psprojs
-*.psprojs
+s
+PowerScp.psprojs
+PowerScp.psproj
+*tempPoint*
+*BIO-TCATA*
 Test-Module.ps1
-PowerScp.TempPoint.psd1
-Test-Module.TempPoint.ps1
