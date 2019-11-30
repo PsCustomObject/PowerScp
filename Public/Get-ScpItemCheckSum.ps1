@@ -1,6 +1,6 @@
 ﻿function Get-ScpItemCheckSum
 {
-<#
+	<#
 	.SYNOPSIS
 		Function will get checksum of an item on remote host.
 	
@@ -18,9 +18,6 @@
 	
 	.EXAMPLE
 		PS C:\> Get-ScpItemCheckSum -Session $value1
-	
-	.NOTES
-		Additional information about the function.
 #>
 	
 	[CmdletBinding()]
@@ -28,13 +25,12 @@
 	(
 		[Parameter(Mandatory = $true,
 				   ValueFromPipeline = $true)]
-		[WinSCP.Session]
-		$Session,
+		[WinSCP.Session]$Session,
 		[SupportsWildcards()]
 		[ValidateSet('md2', 'md5', 'sha-1', 'sha-224', 'sha-256', 'sha-384', 'sha-512', 'shake128', 'shake256', IgnoreCase = $true)]
-		[string]
-		$HashAlgorithm = 'md5',
-		$ItemName
+		[string]$HashAlgorithm = 'md5',
+		[Parameter(Mandatory = $true)]
+		[string]$ItemName
 	)
 	
 	begin
@@ -62,22 +58,27 @@
 			return $null
 		}
 		
-		try
+		# Check path exists
+		if (Test-ScpPath -Session $Session -RemotePath $ItemName)
 		{
-			# Get matching items
-			$Session.EnumerateRemoteFiles($path, $Filter, $enumOptions) #TODO: This requires full path and should be revised
-			
-			# Return item checksum
-			return ($Session.CalculateFileChecksum($HashAlgorithm, $path))
+			try
+			{
+				# Return item checksum
+				return ($Session.CalculateFileChecksum($HashAlgorithm, $path))
+			}
+			catch
+			{
+				# Save exception message
+				[string]$reportedException = $_.Exception.Message
+				
+				Write-Error -Message $reportedException
+				
+				return $null
+			}
 		}
-		catch
+		else
 		{
-			# Save exception message
-			[string]$reportedException = $_.Exception.Message
-			
-			Write-Error -Message $reportedException
-			
-			return $null
+			Write-Error -Message "Cannot find item because $ItemName does not exist"
 		}
 	}
 }s
