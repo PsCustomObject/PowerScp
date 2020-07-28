@@ -217,7 +217,6 @@
 	# Create Session Object hash
 	[hashtable]$sesionObjectParameters = @{ }
 	
-	
 	# Get parameterset
 	switch ($PsCmdlet.ParameterSetName)
 	{

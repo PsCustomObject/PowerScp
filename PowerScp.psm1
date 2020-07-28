@@ -1,6 +1,6 @@
 ﻿# Load moule's function
 $paramGetChildItem = @{
-	Path = "$PSScriptRoot\Public\*.ps1", "$PSScriptRoot\Support\*.ps1"
+	Path = "$PSScriptRoot\Public\*.ps1", "$PSScriptRoot\Private\*.ps1"
 	Exclude = '*.tests.ps1', '*profile.ps1'
 	ErrorAction = 'SilentlyContinue'
 }
