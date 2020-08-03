@@ -1,4 +1,44 @@
-﻿function Get-HostFingerPrint
+﻿function Format-StringPath
+{
+<#
+	.SYNOPSIS
+		Will format string in SCP format.
+	
+	.DESCRIPTION
+		Will format string in SCP format replacing backslashes to slashes.
+	
+	.PARAMETER Path
+		A string representing the path(s) to format.
+	
+	.EXAMPLE
+		PS C:\> Format-StringPath -Path $value1
+#>
+    
+    [OutputType([String])]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [String[]]
+        $Path
+    )
+    
+    process
+    {
+        foreach ($item in $Path)
+        {
+            # Sanitize input
+            if ($item.Contains('\'))
+            {
+                $item = $item.Replace('\', '/')
+            }
+            
+            $item
+        }
+    }
+}
+
+function Get-HostFingerPrint
 {
 	<#
 	.SYNOPSIS
@@ -96,7 +136,7 @@
     )
     
     # Add assembly
-    Add-Type -Path "$PSScriptRoot\..\lib\WinSCPnet.dll"
+    Add-Type -Path "$PSScriptRoot\lib\WinSCPnet.dll"
     
     # Create Session Options hash
     [hashtable]$sessionOptions = @{ }
@@ -132,7 +172,7 @@
     $sessionOptions.Add('Timeout', $ConnectionTimeOut)
     
     # Add mandatory paramters to Session Object
-    $sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\..\bin\winscp.exe")
+    $sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\bin\winscp.exe")
     
     # Create session options object
     $paramNewObject = @{
@@ -806,7 +846,6 @@ function New-ScpSession
     }
     
     # Get cmdlet parameters
-    
     foreach ($key in $PSBoundParameters.Keys)
     {
         switch ($key)
@@ -927,7 +966,7 @@ function New-ScpSession
     $sessionOptions.Add('Timeout', $ConnectionTimeOut)
     
     # Add mandatory paramters to Session Object
-    $sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\..\bin\winscp.exe")
+    $sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\bin\winscp.exe")
     
     # Create session options object
     $paramNewObject = @{
@@ -1113,7 +1152,7 @@ function Start-WinScpConsole
     param ()
     
     # Define WinSCP exe path
-    [string]$exePath = "$PSScriptRoot\..\bin\WinSCP.exe"
+    [string]$exePath = "$PSScriptRoot\bin\WinSCP.exe"
     
     # Define exe arguments
     [string]$scpArgs = '/Console'
@@ -1235,6 +1274,495 @@ function Test-ScpPath
             }
             
             return $false
+        }
+    }
+}
+
+function Send-ScpItem
+{
+    <#
+        .SYNOPSIS
+            Cmdlet will upload one or more items to a remote host.
+        
+        .DESCRIPTION
+            Cmdlet will upload one or more items to a remote host.
+        
+        .PARAMETER LocalPath
+            A string representing the path on the local machine containing files/folders that will be uploaded to remote host.
+        
+        .PARAMETER TransferOptions
+            A WinSCP.TransferOptions object containing transfer options that will be aplied to current session.
+            
+            Use New-ScpTrnasferOptions to initialize an object of the appropriate type.
+            
+            All transfer options can be applied at runtime via appropriate parameters.
+        
+        .PARAMETER SpeedLimit
+            An integer representing the speed limit that will be applied when transferring data to the remote host.
+        
+        .PARAMETER FileMask
+            Allows the use of wildcard mask to specify relevant file extensions/names.
+        
+        .PARAMETER Permissions
+            An int between 0 and 777 representing permissions that will be applied to uploaded files.
+            
+            Default behavior is inheriting permissions from remote host folder.
+            
+            Permissions are in UNIX octal format for example 400 or 440
+        
+        .PARAMETER OverWriteMode
+            By default if a file with the same name exists on the remote host it will be overwritten.
+            
+            Possible values are:
+            
+            - Overwrite
+            - Resume
+            - Append
+        
+        .PARAMETER PreserveTimeStamp
+            By default timestamp of uploaded files is retained, paramter allows to change this behavior.
+        
+        .PARAMETER TransferMode
+            Parameter allows to specify the type of transfer that will be used.
+        
+        .PARAMETER Session
+            A valid WinSCP.Session object. Requires connection to be in open state.
+        
+        .PARAMETER RemotePath
+            A string representing remote path where files/folders will be uploaded.
+        
+        .PARAMETER TransferFilesOnly
+            By default cmdlet will copy the enter folder structure when a directory is specified. When parameter is used
+            only files contained in the specified directory will be transferred to the remote host recursively.
+        
+        .EXAMPLE
+            PS C:\> Send-ScpItem -Session $Session -RemotePath 'value2'
+    #>
+    
+    [CmdletBinding(DefaultParameterSetName = 'RuntimeTransferOptions',
+                   SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [Parameter(ParameterSetName = 'TransferOptionsObject',
+                   Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string[]]
+        $LocalPath,
+        [Parameter(ParameterSetName = 'TransferOptionsObject')]
+        [ValidateNotNullOrEmpty()]
+        [WinSCP.TransferOptions]
+        $TransferOptions,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [ValidateNotNullOrEmpty()]
+        [int]
+        $SpeedLimit = 0,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $FileMask,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [ValidateNotNullOrEmpty()]
+        [ValidateRange(0, 777)]
+        [int]
+        $Permissions,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet('Overwrite', 'Resume', 'Append', IgnoreCase = $true)]
+        [string]
+        $OverWriteMode,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [ValidateNotNullOrEmpty()]
+        [bool]
+        $PreserveTimeStamp = $True,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet('Automatic', 'Binary', 'Text', IgnoreCase = $true)]
+        [string]
+        $TransferMode = 'Automatic',
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions',
+                   Mandatory = $true)]
+        [Parameter(ParameterSetName = 'TransferOptionsObject')]
+        [WinSCP.Session]
+        $Session,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions',
+                   Mandatory = $true)]
+        [Parameter(ParameterSetName = 'TransferOptionsObject')]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $RemotePath,
+        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
+        [Parameter(ParameterSetName = 'TransferOptionsObject')]
+        [switch]
+        $TransferFilesOnly
+    )
+    
+    begin
+    {
+        if (Test-ScpSession -Session $Session)
+        {
+            Write-Verbose -Message 'Session is in open state we can continue'
+        }
+        else
+        {
+            throw 'The WinSCP Session is not in an open state'
+        }
+    }
+    
+    process
+    {
+        switch ($PsCmdlet.ParameterSetName)
+        {
+            'TransferOptionsObject'
+            {
+                $TransferOptions = $TransferOptions
+                
+                break
+            }
+            'RuntimeTransferOptions'
+            {
+                # Create new object
+                $TransferOptions = New-Object -TypeName 'WinSCP.TransferOptions'
+                
+                switch ($PSBoundParameters.Keys)
+                {
+                    'SpeedLimit'
+                    {
+                        # Set specified speed limit
+                        $TransferOptions.'SpeedLimit' = $SpeedLimit
+                        
+                        break
+                    }
+                    'PreserveTimeStamp'
+                    {
+                        # Preserve file TimeStamp
+                        $TransferOptions.'PreserveTimestamp' = $PreserveTimeStamp
+                        
+                        break
+                    }
+                    'OverWriteMode'
+                    {
+                        # Overwrite destination if exists
+                        $TransferOptions.'OverWriteMode' = $OverWriteMode
+                        
+                        break
+                    }
+                    'Permissions'
+                    {
+                        # Set UNIX style permissions
+                        $TransferOptions.'FilePermissions'.'Octal' = $Permissions
+                        
+                        break
+                    }
+                    'FileMask'
+                    {
+                        # Set specified filemask
+                        $TransferOptions.'FileMask' = $FileMask
+                        
+                        break
+                    }
+                }
+            }
+        }
+        
+        # Validate local paths
+        foreach ($item in $LocalPath)
+        {
+            if (!(Test-Path $item))
+            {
+                Write-Warning -Message "Cannot find path $item because it does not exist"
+                
+                continue
+            }
+            else
+            {
+                if ($isValidPath -eq $false)
+                {
+                    New-ScpDirectory -Session $session -RemotePath
+                }
+                
+                if ($RemotePath.EndsWith('/') -eq $false)
+                {
+                    # Check if destination path exists
+                    [bool]$isValidPath = Test-ScpPath -Session $session -RemotePath $RemotePath
+                    
+                    if ($isValidPath -eq $true)
+                    {
+                        # Check if path is a directory
+                        $paramGetScpItemType = @{
+                            RemotePath = $RemotePath
+                            Session    = $Session
+                        }
+                        
+                        # Check if we should sanitize input string
+                        [bool]$isDirectory = (Get-ScpItemType @paramGetScpItemType).'IsDirectory'
+                        
+                        if ($isDirectory -eq $true)
+                        {
+                            # Append trailing character
+                            $RemotePath = '{0}{1}' -f $RemotePath, '/'
+                        }
+                    }
+                    else
+                    {
+                        if ($RemotePath.EndsWith('/') -eq $false)
+                        {
+                            # Append trailing character
+                            $RemotePath = '{0}{1}' -f $RemotePath, '/'
+                        }
+                        
+                        # Format path for WinSCP
+                        $RemotePath = Format-StringPath -Path $RemotePath
+                        
+                        # Create remote directory
+                        $paramNewScpDirectory = @{
+                            Session        = $session
+                            RemotePath     = $RemotePath
+                            SuppressOutput = $true
+                        }
+                        
+                        New-ScpDirectory @paramNewScpDirectory
+                    }
+                }
+                
+                try
+                {
+                    # Format path for WinSCP
+                    $RemotePath = Format-StringPath -Path $RemotePath
+                    
+                    if ($PSBoundParameters.ContainsKey('TransferFilesOnly'))
+                    {
+                        # Get local item type
+                        [bool]$isDirectory = (Get-Item -Path $item).'PSIsContainer'
+                        
+                        if ($isDirectory)
+                        {
+                            # Get all files in the tree
+                            [array]$filesToTransfer = Get-ChildItem -Path $item -Recurse
+                            
+                            foreach ($file in $filesToTransfer)
+                            {
+                                # Run upload and store job status
+                                $jobStatus = $Session.PutFiles($file.FullName, $RemotePath, $OverWriteMode, $TransferOptions)
+                                
+                                if ($jobStatus.IsSuccess)
+                                {
+                                    Write-Output -InputObject $jobStatus
+                                }
+                                else
+                                {
+                                    Write-Error -Message $jobStatus.Failures[0]
+                                }
+                            }
+                        }
+                        else
+                        {
+                            # Run upload and store job status
+                            $jobStatus = $Session.PutFiles($file, $RemotePath, $OverWriteMode, $TransferOptions)
+                            
+                            if ($jobStatus.IsSuccess)
+                            {
+                                Write-Output -InputObject $jobStatus
+                            }
+                            else
+                            {
+                                Write-Error -Message $jobStatus.Failures[0]
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    Write-Error -Message $Error.Exception.Message
+                }
+            }
+        }
+    }
+}
+
+function Test-ScpPath
+{
+    <#
+        .SYNOPSIS
+            Cmdlet will check if a specified path/file exists on the remote host.
+        
+        .DESCRIPTION
+            Cmdlet will check if a specified path/file exists on the remote host.
+        
+        .PARAMETER Session
+            A valid WinSCP.Session object. Requires connection to be in open state.
+        
+        .PARAMETER RemotePath
+            A string representing a valid path on the remote host.
+        
+        .EXAMPLE
+            PS C:\> Test-ScpPath -Session $Session -RemotePath 'value2'
+    #>
+    
+    [CmdletBinding(ConfirmImpact = 'High',
+                   SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [WinSCP.Session]
+        $Session,
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $RemotePath
+    )
+    
+    begin
+    {
+        if (Test-ScpSession -Session $Session)
+        {
+            Write-Verbose -Message 'Session is in open state we can continue'
+        }
+        else
+        {
+            throw 'The WinSCP Session is not in an open state'
+        }
+    }
+    
+    process
+    {
+        return $session.FileExists($RemotePath)
+    }
+}
+
+function Get-ScpItemType
+{
+    <#
+        .SYNOPSIS
+            Cmdlet will return SCP path properties.
+        
+        .DESCRIPTION
+            Cmdlet will return detailed information about items in the specified remote path.
+            
+        .PARAMETER Session
+            A description of the Session parameter.
+        
+        .PARAMETER RemotePath
+            A description of the RemotePath parameter.
+        
+        .PARAMETER Filter
+            A description of the Filter parameter.
+        
+        .EXAMPLE
+            PS C:\> Get-ScpItemType -Session $value1 -RemotePath 'Value2'
+    #>
+    
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [WinSCP.Session]
+        $Session,
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $RemotePath,
+        [AllowNull()]
+        [string]
+        $Filter
+    )
+    
+    begin
+    {
+        if (Test-ScpSession -Session $Session)
+        {
+            Write-Verbose -Message 'Session is in open state we can continue'
+        }
+        else
+        {
+            throw 'The WinSCP Session is not in an open state'
+        }
+    }
+    
+    process
+    {
+        return $session.GetFileInfo($RemotePath)
+    }
+}
+
+function New-ScpDirectory
+{
+    <#
+        .SYNOPSIS
+            Cmdlet will create a new directory on the remote host in the specified path.
+        
+        .DESCRIPTION
+            Cmdlet will create a new directory on the remote host in the specified path if the specified directory exists no action will be taken.
+        
+        .PARAMETER Session
+            A valid WinSCP.Session object. Requires connection to be in open state.
+        
+        .PARAMETER RemotePath
+            A string representing the full path underneath which the directory will be created.
+        
+        .PARAMETER SuppressOutput
+            When parameter is specified any error output will be suppressed.
+        
+        .EXAMPLE
+            PS C:\> New-ScpDirectory -Session $Session -RemotePath 'value2'
+    #>
+    
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [WinSCP.Session]
+        $Session,
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $RemotePath,
+        [switch]
+        $SuppressOutput
+    )
+    
+    begin
+    {
+        if (Test-ScpSession -Session $Session)
+        {
+            Write-Verbose -Message 'Session is in open state we can continue'
+        }
+        else
+        {
+            throw 'The WinSCP Session is not in an open state'
+        }
+    }
+    
+    process
+    {
+        # Check if path already exists
+        if (Test-ScpPath -Session $Session -RemotePath $RemotePath)
+        {
+            Write-Warning -Message "Directory $RemotePath already exists on remote host - No action will be taken"
+            
+            return
+        }
+        else
+        {
+            try
+            {
+                # Create directory
+                $Session.CreateDirectory($RemotePath)
+                
+                Write-Verbose -Message 'Directory correctly created'
+                
+                return $true
+            }
+            catch
+            {
+                
+                if ($PSBoundParameters.ContainsKey('SuppressOutput'))
+                {
+                    return $false
+                }
+                
+                Write-Error -Message $Error.Exception.Message
+                
+                return $false
+            }
         }
     }
 }
