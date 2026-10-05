@@ -1,6 +1,6 @@
 ﻿@{
     RootModule = 'PowerScp.psm1'
-    ModuleVersion = '1.2.0'
+    ModuleVersion = '1.2.1'
     GUID = '3c42657a-e9fa-4358-a934-170727493e6c'
     Author = 'PsCustomObject - Daniele Catanesi'
     CompanyName = 'https://PsCustomObject.github.io'

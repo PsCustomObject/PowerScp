@@ -16,6 +16,13 @@ function Assert-ScpSession {
     if ($null -eq $Session -or !$Session.Opened) { throw 'The WinSCP Session is not in an open state' }
 }
 $script:ScpSessions = @{}
+# Release resources when Remove-Module or Import-Module -Force unloads this instance.
+$ExecutionContext.SessionState.Module.OnRemove = {
+    foreach ($session in @($script:ScpSessions.Values)) {
+        try { $session.Dispose() } catch { Write-Warning "Could not dispose a tracked WinSCP session: $_" }
+    }
+    $script:ScpSessions.Clear()
+}
 
 function Format-StringPath {
     [CmdletBinding()]
@@ -24,6 +31,8 @@ function Format-StringPath {
     process { foreach ($item in $Path) { $item.Replace('\', '/') } }
 }
 function New-ScpSessionObject {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification='Constructs an in-memory options or unopened session object; public mutations implement ShouldProcess.')]
+    [CmdletBinding()]
     param([string]$SessionLogPath, [string]$DebugLogPath, [int]$DebugLevel = 0,
           [timespan]$ReconnectTime = [timespan]::FromSeconds(120))
     Assert-ScpPlatform
@@ -47,6 +56,10 @@ function New-ScpSessionOptions {
     .PARAMETER Scan
     Build options for fingerprint scanning without requiring a trusted SSH key.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingUsernameAndPasswordParams', '', Justification='Legacy username/password parameters are retained for compatibility; PSCredential is the recommended alternative.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '', Justification='Legacy string passwords are retained for compatibility; use Credentials and SecurePrivateKeyPassphrase instead.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification='Constructs an in-memory options or unopened session object; public mutations implement ShouldProcess.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '', Justification='Established public API mirrors the WinSCP SessionOptions and TransferOptions type names.')]
     [CmdletBinding()]
     [OutputType([WinSCP.SessionOptions])]
     param(
@@ -160,6 +173,8 @@ function Get-HostFingerPrint {
     <# .SYNOPSIS
     Scan a fingerprint; verify it independently before trusting it.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingUsernameAndPasswordParams', '', Justification='Legacy username/password parameters are retained for compatibility; PSCredential is the recommended alternative.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '', Justification='Legacy string passwords are retained for compatibility; use Credentials and SecurePrivateKeyPassphrase instead.')]
     [CmdletBinding(DefaultParameterSetName='Connection')]
     param(
         [Parameter(Mandatory,ValueFromPipeline,ParameterSetName='Options')][WinSCP.SessionOptions]$SessionOptions,
@@ -195,7 +210,16 @@ function New-ScpSession {
     Open a session from connection parameters or reusable SessionOptions.
     .PARAMETER Name
     Optional name for retrieving this session with Get-ScpSession. Names must be unique.
+    .DESCRIPTION
+    Opens and registers a connection. Windows is required. Use verified fingerprints
+    for SSH connections and dispose sessions in a finally block. Module removal
+    also disposes tracked sessions. WhatIf builds options without opening a connection.
+    .EXAMPLE
+    $session = New-ScpSession -RemoteHost sftp.example.org -Protocol Sftp -Credentials (Get-Credential) -SshHostKeyFingerprint $verifiedFingerprint
+    Opens an SFTP connection using a fingerprint verified with the server administrator.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingUsernameAndPasswordParams', '', Justification='Legacy username/password parameters are retained for compatibility; PSCredential is the recommended alternative.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '', Justification='Legacy string passwords are retained for compatibility; use Credentials and SecurePrivateKeyPassphrase instead.')]
     [CmdletBinding(SupportsShouldProcess,DefaultParameterSetName='Connection')]
     [OutputType([WinSCP.Session])]
     param(
@@ -283,6 +307,7 @@ function Remove-ScpSession {
     Dispose a session; disposed sessions cannot be reused.
     #>
     [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([bool])]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session)
     process { if ($PSCmdlet.ShouldProcess('WinSCP session','Dispose')) {
             $Session.Dispose()
@@ -396,6 +421,8 @@ function New-ScpTransferOptions {
     .PARAMETER Permissions
     Unix octal permissions, such as 644, 755 or 0755. Each digit must be 0 through 7.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification='Constructs an in-memory options or unopened session object; public mutations implement ShouldProcess.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '', Justification='Established public API mirrors the WinSCP SessionOptions and TransferOptions type names.')]
     [CmdletBinding()]
     [OutputType([WinSCP.TransferOptions])]
     param([ValidateRange(0,2147483647)][int]$SpeedLimit=0, [string]$FileMask,
@@ -423,7 +450,7 @@ function New-ScpTransferOptions {
     foreach ($key in $RawSettings.Keys) { $options.AddRawSettings([string]$key,[string]$RawSettings[$key]) }
     $options
 }
-function Resolve-ScpTransferOptions {
+function Resolve-ScpTransferOption {
     param([System.Collections.IDictionary]$Parameters)
     if (($Parameters.Keys -contains 'TransferOptions')) { return $Parameters['TransferOptions'] }
     $arguments = @{}
@@ -437,6 +464,7 @@ function New-ScpDirectory {
     Create remote directories. Force creates missing parents.
     #>
     [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([bool])]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
           [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
           [switch]$Force, [switch]$SuppressOutput)
@@ -471,8 +499,23 @@ function Send-ScpItem {
     Flatten all files from a local directory tree into the destination. Duplicate names are rejected.
     .PARAMETER Remove
     Delete local source files after a successful transfer. Disabled by default.
+    .DESCRIPTION
+    Local paths are literal. RemotePath is a directory; missing parents are created.
+    Source removal is opt-in. Failed operations terminate. WhatIf prevents both
+    transfer and remote directory creation. TransferFilesOnly flattens directory
+    trees and rejects duplicate names before transferring.
+    .PARAMETER DestinationFileName
+    Renames a single local file during upload. Supply the destination directory
+    separately through RemotePath. Cannot be combined with TransferFilesOnly.
+    .EXAMPLE
+    Send-ScpItem -Session $session -LocalPath './report[1].csv' -RemotePath '/incoming' -WhatIf
+    Previews an upload without interpreting brackets as a local wildcard.
+    .EXAMPLE
+    Send-ScpItem -Session $session -LocalPath './report.csv' -RemotePath '/incoming' -DestinationFileName 'ready.csv'
+    Uploads one file under a new remote name, retaining the local source.
     #>
     [CmdletBinding(SupportsShouldProcess,DefaultParameterSetName='RuntimeTransferOptions')]
+    [OutputType([WinSCP.TransferOperationResult])]
     param(
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$LocalPath,
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$RemotePath,
@@ -488,7 +531,7 @@ function Send-ScpItem {
     )
     process {
         Assert-ScpSession $Session
-        $options = Resolve-ScpTransferOptions $PSBoundParameters
+        $options = Resolve-ScpTransferOption $PSBoundParameters
         $destination = (Format-StringPath $RemotePath).TrimEnd('/') + '/'
         $sources = @(foreach ($path in $LocalPath) {
             $item = Get-Item -LiteralPath $path -ErrorAction Stop
@@ -522,8 +565,22 @@ function Receive-ScpItem {
     Download remote file masks into an existing local directory.
     .PARAMETER Remove
     Remove remote sources after successful download. Disabled by default.
+    .DESCRIPTION
+    Remote paths are WinSCP masks unless LiteralPath is set. LocalPath must be an
+    existing filesystem directory. Sources are retained unless Remove is set.
+    .PARAMETER LiteralPath
+    Escapes remote mask characters so a specific file or directory is selected.
+    .PARAMETER DestinationFileName
+    A valid Windows leaf filename. Requires one literal remote file, not a directory.
+    .EXAMPLE
+    Receive-ScpItem -Session $session -RemotePath '/outgoing/*.csv' -LocalPath './downloads'
+    Downloads matching CSV files without removing remote sources.
+    .EXAMPLE
+    Receive-ScpItem -Session $session -RemotePath '/report[1].txt' -LiteralPath -LocalPath './downloads' -DestinationFileName 'saved.txt'
+    Downloads a literal bracket filename under a new local name.
     #>
     [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([WinSCP.TransferOperationResult])]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
           [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
           [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$LocalPath,
@@ -537,10 +594,14 @@ function Receive-ScpItem {
         if ($DestinationFileName) {
             if (!$LiteralPath -or $RemotePath.Count -ne 1) { throw 'DestinationFileName requires one literal remote file.' }
             Assert-ScpLeafName $DestinationFileName
+            Assert-ScpLocalLeafName $DestinationFileName
             $destination = Join-Path $directory.FullName $DestinationFileName
         }
         foreach ($path in $RemotePath) {
             $source = Format-StringPath $path
+            if ($DestinationFileName -and $Session.GetFileInfo($source).IsDirectory) {
+                throw 'DestinationFileName requires a remote file, not a directory.'
+            }
             if ($LiteralPath) { $source = [WinSCP.RemotePath]::EscapeFileMask($source) }
             $action = 'Download'
             if ($Remove) { $action = 'Download and remove remote source' }
@@ -557,6 +618,7 @@ function Remove-ScpItem {
     Remove remote files or directories. Paths are literal unless UseFileMask is set.
     #>
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact='High')]
+    [OutputType([WinSCP.RemovalOperationResult])]
     param([Parameter(Mandatory,ValueFromPipeline)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
           [Parameter(Mandatory)][WinSCP.Session]$Session, [switch]$UseFileMask)
     process {
@@ -576,6 +638,14 @@ function Remove-ScpItem {
 function Move-ScpItem {
     <# .SYNOPSIS
     Move remote items; Force permits replacement of existing files and PassThru returns metadata.
+    .DESCRIPTION
+    An existing destination directory receives the source's original name. Multiple
+    sources require an existing destination directory. Force replaces files only;
+    the previous target is preserved for restoration if replacement fails. A partial
+    target prevents automatic restoration; the error reports the retained backup.
+    .EXAMPLE
+    Move-ScpItem -Session $session -RemotePath '/incoming/report.csv' -Destination '/archive' -PassThru
+    Moves a file into an existing archive directory and returns metadata.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
@@ -597,6 +667,14 @@ function Move-ScpItem {
 function Copy-ScpItem {
     <# .SYNOPSIS
     Copy remote items; Force permits replacement of existing files and PassThru returns metadata.
+    .DESCRIPTION
+    Copies files on the server where the protocol/server supports it. Directories
+    are not supported. Force preserves an existing target using a sibling backup
+    before replacement; it requires server rename and delete permissions as well
+    as copying support. Failed restoration reports the backup path for recovery.
+    .EXAMPLE
+    Copy-ScpItem -Session $session -RemotePath '/incoming/report.csv' -Destination '/archive/report.csv' -Force
+    Replaces an archived file while preserving the old file until copying succeeds.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
@@ -620,6 +698,7 @@ function Invoke-ScpCommand {
     Execute a command on a server supporting shell commands.
     #>
     [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([WinSCP.CommandExecutionResult])]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
           [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$Command)
     process {
@@ -638,8 +717,15 @@ function Sync-ScpDirectory {
     Synchronize local and remote directories. Removal requires the explicit Remove switch.
     .PARAMETER Mode
     Remote uploads changes; Local downloads changes; Both synchronizes in both directions.
+    .DESCRIPTION
+    LocalPath must exist. Remove and Mirror are invalid with Both. WhatIf describes
+    the operation; use Compare-ScpDirectory to inspect individual planned changes.
+    .EXAMPLE
+    Sync-ScpDirectory -Session $session -LocalPath './data' -RemotePath '/data' -Mode Remote -WhatIf
+    Previews an upload synchronization without transferring or deleting files.
     #>
     [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([WinSCP.SynchronizationResult])]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
           [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$LocalPath,
           [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$RemotePath,
@@ -709,6 +795,7 @@ function New-ScpItemPermission {
     .PARAMETER Numeric
     Decimal bitmask, for example 420 for octal 644.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification='Constructs an in-memory options or unopened session object; public mutations implement ShouldProcess.')]
     [CmdletBinding(DefaultParameterSetName='Octal')]
     [OutputType([WinSCP.FilePermissions])]
     param(
@@ -745,6 +832,7 @@ function New-ScpTransferResumeSupport {
     .PARAMETER Threshold
     Minimum size in KB. Threshold selects Smart mode; combine it only with State Smart.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification='Constructs an in-memory options or unopened session object; public mutations implement ShouldProcess.')]
     [CmdletBinding()]
     [OutputType([WinSCP.TransferResumeSupport])]
     param([WinSCP.TransferResumeSupportState]$State='Default',
@@ -766,6 +854,16 @@ function Assert-ScpLeafName {
 function Rename-ScpItem {
     <# .SYNOPSIS
     Rename a remote item within its current directory.
+    .DESCRIPTION
+    NewName is an exact leaf name, never a destination directory. Existing
+    directories are rejected. Force permits file replacement with backup recovery.
+    .PARAMETER Force
+    Preserves an existing target file under a unique sibling backup name, then
+    replaces it. On failure, restores it if the target is absent; otherwise reports
+    the retained backup path. This process is not atomic and needs server rename support.
+    .EXAMPLE
+    Rename-ScpItem -Session $session -RemotePath '/incoming/report.tmp' -NewName 'report.csv' -PassThru
+    Renames within the same directory and returns the resulting metadata.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
@@ -779,33 +877,68 @@ function Rename-ScpItem {
         $parent = [WinSCP.RemotePath]::GetDirectoryName($source)
         $destination = [WinSCP.RemotePath]::Combine($parent,$NewName)
         if ($PSCmdlet.ShouldProcess("$source -> $destination",'Rename remote item')) {
-            Invoke-ScpRelocation -Session $Session -RemotePath $source -Destination $destination -Force:$Force -PassThru:$PassThru
+            Invoke-ScpRelocation -Session $Session -RemotePath $source -Destination $destination -ExactDestination -Force:$Force -PassThru:$PassThru
         }
     }
 }
 function Invoke-ScpRelocation {
+    [CmdletBinding()]
     param([WinSCP.Session]$Session, [string]$RemotePath, [string]$Destination,
-          [switch]$Copy, [switch]$Force, [switch]$PassThru)
+          [switch]$Copy, [switch]$Force, [switch]$PassThru, [switch]$ExactDestination)
     $source = Format-StringPath $RemotePath
     $target = Format-StringPath $Destination
     $sourceInfo = $Session.GetFileInfo($source)
     if ($Copy -and $sourceInfo.IsDirectory) { throw 'Remote copy supports files only.' }
-    if ($Session.FileExists($target) -and $Session.GetFileInfo($target).IsDirectory) {
+    if (!$ExactDestination -and $Session.FileExists($target) -and $Session.GetFileInfo($target).IsDirectory) {
         $target = [WinSCP.RemotePath]::Combine($target,$sourceInfo.Name)
     }
     if ($source -ceq $target) { throw 'Source and destination refer to the same item.' }
+    $backup = $null
     if ($Session.FileExists($target)) {
         $targetInfo = $Session.GetFileInfo($target)
         if ($sourceInfo.FullName -ceq $targetInfo.FullName) { throw 'Source and destination refer to the same item.' }
+        if ($targetInfo.IsDirectory) { throw 'Cannot replace an existing destination directory.' }
         if (!$Force) { throw "Destination already exists: $target. Use Force to replace a file." }
-        if ($targetInfo.IsDirectory) { throw 'Force cannot replace an existing directory.' }
-        $Session.RemoveFile($target)
+        if ($sourceInfo.IsDirectory) { throw 'Cannot replace a file with a directory.' }
+        $parent = [WinSCP.RemotePath]::GetDirectoryName($target)
+        do {
+            $backup = [WinSCP.RemotePath]::Combine($parent,('.powerscp-backup-' + [guid]::NewGuid().ToString('N')))
+        } while ($Session.FileExists($backup))
+        # Preserve the old destination until the replacement has completed.
+        $Session.MoveFile($target,$backup)
     }
-    if ($Copy) { $Session.DuplicateFile($source,$target) }
-    else { $Session.MoveFile($source,$target) }
+    try {
+        if ($Copy) { $Session.DuplicateFile($source,$target) }
+        else { $Session.MoveFile($source,$target) }
+    } catch {
+        $operationError = $_
+        if ($backup) {
+            try {
+                # Do not destroy a partial target or another client's new file.
+                if ($Session.FileExists($target)) { throw "Destination now exists: $target" }
+                $Session.MoveFile($backup,$target)
+            } catch {
+                throw "Replacement failed: $($operationError.Exception.Message). Restoration failed: $($_.Exception.Message). Original destination retained at '$backup'; recover it manually."
+            }
+        }
+        $PSCmdlet.ThrowTerminatingError($operationError)
+    }
+    if ($backup) {
+        try { $Session.RemoveFile($backup) }
+        catch { Write-Warning "Replacement succeeded, but original destination remains at '$backup': $_" }
+    }
     if ($PassThru) { $Session.GetFileInfo($target) }
 }
-function Write-ScpBytes {
+function Assert-ScpLocalLeafName {
+    param([string]$Name)
+    # Downloads run on Windows even when offline tests run elsewhere.
+    Assert-ScpLeafName $Name
+    if ($Name -match '[<>:"|?*\x00-\x1f]' -or $Name -match '[ .]$' -or
+        $Name -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)') {
+        throw 'DestinationFileName must be a valid Windows filename without wildcard characters, device names or alternate data streams.'
+    }
+}
+function Write-ScpByte {
     # Unique temporary file supports file creation on all protocols, including S3.
     param([WinSCP.Session]$Session, [string]$RemotePath, [byte[]]$Bytes,
           [WinSCP.TransferOptions]$TransferOptions)
@@ -829,6 +962,12 @@ function New-ScpItem {
     .DESCRIPTION
     Existing files require Force before replacement. Missing parents are created
     for directories with Force. File parents must already exist.
+    .PARAMETER TransferOptions
+    Content writes require Binary transfer mode, Overwrite mode and no FileMask.
+    These constraints prevent text conversion and accidental filtering.
+    .EXAMPLE
+    New-ScpItem -Session $session -RemotePath '/incoming/ready.flag'
+    Creates an empty remote file. An existing file requires Force.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
@@ -849,18 +988,19 @@ function New-ScpItem {
                         if (!$Force) { throw "Remote item already exists: $path. Use Force to replace it." }
                         if ($Session.GetFileInfo($path).IsDirectory) { throw 'Cannot replace a directory with a file.' }
                     }
-                    $options = Resolve-ScpContentTransferOptions $TransferOptions
-                    Write-ScpBytes -Session $Session -RemotePath $path -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($Value)) -TransferOptions $options | Out-Null
+                    $options = Resolve-ScpContentTransferOption $TransferOptions
+                    Write-ScpByte -Session $Session -RemotePath $path -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($Value)) -TransferOptions $options | Out-Null
                 }
                 $Session.GetFileInfo($path)
             }
         }
     }
 }
-function Resolve-ScpContentTransferOptions {
+function Resolve-ScpContentTransferOption {
     param([WinSCP.TransferOptions]$TransferOptions)
     if ($TransferOptions.OverwriteMode -ne 'Overwrite') { throw 'Content writes require Overwrite mode.' }
     if ($TransferOptions.FileMask) { throw 'Content writes do not accept a FileMask.' }
+    if ($TransferOptions.TransferMode -ne 'Binary') { throw 'Content writes require Binary transfer mode to preserve exact bytes.' }
     # Resume/temporary settings on a fresh unique local file are not needed.
     $TransferOptions
 }
@@ -871,6 +1011,9 @@ function Get-ScpContent {
     Return the entire file as one string instead of separate lines.
     .PARAMETER Encoding
     Text encoding name. UTF-8 is the default; a byte order mark is detected on read.
+    .EXAMPLE
+    Get-ScpContent -Session $session -RemotePath '/config/settings.json' -Raw
+    Reads the entire remote text file and disposes its download stream.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
@@ -895,6 +1038,12 @@ function Set-ScpContent {
     Replace a remote file with text, using UTF-8 without a BOM by default.
     .DESCRIPTION
     Works through ordinary file transfer on all protocols. It does not add a newline.
+    .PARAMETER TransferOptions
+    Requires Binary transfer mode, Overwrite mode and no FileMask. Local temporary
+    files are removed even when transfer fails. File parents must already exist.
+    .EXAMPLE
+    Set-ScpContent -Session $session -RemotePath '/config/settings.json' -Value $json
+    Replaces text using UTF-8 without a BOM or an added newline.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
@@ -904,16 +1053,19 @@ function Set-ScpContent {
           [WinSCP.TransferOptions]$TransferOptions=(New-ScpTransferOptions))
     process {
         Assert-ScpSession $Session
-        $options = Resolve-ScpContentTransferOptions $TransferOptions
+        $options = Resolve-ScpContentTransferOption $TransferOptions
         $bytes = [Text.Encoding]::GetEncoding($Encoding).GetBytes($Value)
         if ($PSCmdlet.ShouldProcess($RemotePath,'Replace remote file content')) {
-            Write-ScpBytes -Session $Session -RemotePath (Format-StringPath $RemotePath) -Bytes $bytes -TransferOptions $options
+            Write-ScpByte -Session $Session -RemotePath (Format-StringPath $RemotePath) -Bytes $bytes -TransferOptions $options
         }
     }
 }
 function Compare-ScpDirectory {
     <# .SYNOPSIS
     Return the changes a directory synchronization would make, without transferring files.
+    .EXAMPLE
+    Compare-ScpDirectory -Session $session -LocalPath './data' -RemotePath '/data' -Mode Remote
+    Returns planned synchronization differences without modifying either directory.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,

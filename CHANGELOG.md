@@ -1,5 +1,15 @@
 # PowerScp change history
 
+## 1.2.1 - 2026-10-05
+
+- Treat rename destinations as exact names and reject existing directories.
+- Preserve forced replacement targets in sibling backups; restore on failure when safe, otherwise report recovery paths.
+- Reject directory-over-file replacement and directory sources for download renaming.
+- Validate renamed downloads against Windows filename rules.
+- Require Binary mode for content writes to preserve exact bytes.
+- Dispose tracked sessions when the module is removed or force-reimported.
+- Expand command help, regression tests, static analysis and opt-in live SFTP coverage.
+
 ## 1.2.0 - 2026-10-05
 
 - Compare practical features against the WinSCP 6.3.6.0 Gallery package and document command mappings and deliberate differences.

@@ -243,4 +243,103 @@ Describe 'Remote administration operations' {
         { Get-ScpSession -Name archive } | Should -Throw '*No session*'
     }
 
+    It 'rejects rename to an existing directory without moving the source' {
+        $fake.Files['/data/archive']=[pscustomobject]@{FullName='/data/archive';Name='archive';IsDirectory=$true}
+        { Rename-ScpItem -Session $fake -RemotePath '/data/report.txt' -NewName archive -Force } | Should -Throw '*directory*'
+        @($fake.Calls | Where-Object { $_[0] -in @('Move','Remove') }).Count | Should -Be 0
+    }
+    It 'requires binary mode for exact content writes' {
+        foreach ($mode in @('Ascii','Automatic')) {
+            { Set-ScpContent -Session $fake -RemotePath '/text.txt' -Value "one`ntwo" -TransferOptions (New-ScpTransferOptions -TransferMode $mode) } | Should -Throw '*Binary*'
+            { New-ScpItem -Session $fake -RemotePath '/text.txt' -Value text -TransferOptions (New-ScpTransferOptions -TransferMode $mode) } | Should -Throw '*Binary*'
+        }
+        @($fake.Calls | Where-Object { $_[0] -eq 'Put' }).Count | Should -Be 0
+    }
+    It 'rejects directory sources and invalid Windows download names' {
+        $fake.Files['/dir']=[pscustomobject]@{FullName='/dir';Name='dir';IsDirectory=$true}
+        { Receive-ScpItem -Session $fake -RemotePath '/dir' -LocalPath $TestDrive -LiteralPath -DestinationFileName saved.txt } | Should -Throw '*remote file*'
+        foreach ($name in @('bad*.txt','bad?.txt','file:stream','CON.txt','trailing.','trailing ','bad|name')) {
+            { Receive-ScpItem -Session $fake -RemotePath '/file' -LocalPath $TestDrive -LiteralPath -DestinationFileName $name } | Should -Throw '*Windows filename*'
+        }
+        @($fake.Calls | Where-Object { $_[0] -eq 'Get' }).Count | Should -Be 0
+    }
+    It 'restores the original destination when replacement fails' {
+        $fake.Files['/dest.txt']=[pscustomobject]@{FullName='/dest.txt';Name='dest.txt';IsDirectory=$false}
+        $fake | Add-Member ScriptMethod MoveFile {
+            param($source,$target)
+            $this.Calls.Add(@('Move',$source,$target))
+            $this.Files[$target]=$this.Files[$source]
+            $this.Files.Remove($source)
+        } -Force
+        $fake | Add-Member ScriptMethod DuplicateFile { param($source,$target) throw 'Copy failed' } -Force
+        { Copy-ScpItem -Session $fake -RemotePath '/source.txt' -Destination '/dest.txt' -Force } | Should -Throw '*Copy failed*'
+        $fake.Files.ContainsKey('/dest.txt') | Should -BeTrue
+        @($fake.Files.Keys | Where-Object { $_ -like '*powerscp-backup*' }).Count | Should -Be 0
+        @($fake.Calls | Where-Object { $_[0] -eq 'Remove' }).Count | Should -Be 0
+    }
+    It 'retains the backup and partial target if restoration is unsafe' {
+        $fake.Files['/dest.txt']=[pscustomobject]@{FullName='/dest.txt';Name='dest.txt';IsDirectory=$false}
+        $fake | Add-Member ScriptMethod MoveFile {
+            param($source,$target)
+            $this.Files[$target]=$this.Files[$source]; $this.Files.Remove($source)
+        } -Force
+        $fake | Add-Member ScriptMethod DuplicateFile {
+            param($source,$target)
+            $this.Files[$target]=[pscustomobject]@{FullName=$target;IsDirectory=$false}
+            throw 'Partial copy failed'
+        } -Force
+        { Copy-ScpItem -Session $fake -RemotePath '/source.txt' -Destination '/dest.txt' -Force } | Should -Throw '*recover it manually*'
+        $fake.Files.ContainsKey('/dest.txt') | Should -BeTrue
+        @($fake.Files.Keys | Where-Object { $_ -like '*powerscp-backup*' }).Count | Should -Be 1
+    }
+    It 'rejects directory-over-file replacement before preserving or deleting the target' {
+        $fake.Files['/source']=[pscustomobject]@{FullName='/source';Name='source';IsDirectory=$true}
+        $fake.Files['/dest']=[pscustomobject]@{FullName='/dest';Name='dest';IsDirectory=$false}
+        { Move-ScpItem -Session $fake -RemotePath '/source' -Destination '/dest' -Force } | Should -Throw '*file with a directory*'
+        @($fake.Calls | Where-Object { $_[0] -in @('Move','Remove') }).Count | Should -Be 0
+    }
+    It 'disposes tracked sessions when the module is removed' {
+        & (Get-Module PowerScpFeatureHarness) { param($session) $script:ScpSessions['tracked']=$session } $fake
+        Remove-Module PowerScpFeatureHarness
+        $fake.Opened | Should -BeFalse
+        Import-Module $adapter -Force
+    }
+
+    It 'removes the backup only after successful replacement' {
+        $original=[pscustomobject]@{FullName='/dest.txt';Name='dest.txt';IsDirectory=$false;Content='old'}
+        $replacement=[pscustomobject]@{FullName='/source.txt';Name='source.txt';IsDirectory=$false;Content='new'}
+        $fake.Files['/dest.txt']=$original
+        $fake.Files['/source.txt']=$replacement
+        $fake | Add-Member ScriptMethod MoveFile {
+            param($source,$target)
+            $this.Calls.Add(@('Move',$source,$target)); $this.Files[$target]=$this.Files[$source]; $this.Files.Remove($source)
+        } -Force
+        $fake | Add-Member ScriptMethod DuplicateFile {
+            param($source,$target)
+            $this.Calls.Add(@('Copy',$source,$target)); $this.Files[$target]=$this.Files[$source]
+        } -Force
+        $fake | Add-Member ScriptMethod RemoveFile {
+            param($path) $this.Calls.Add(@('Remove',$path)); $this.Files.Remove($path)
+        } -Force
+        Copy-ScpItem -Session $fake -RemotePath '/source.txt' -Destination '/dest.txt' -Force
+        $fake.Files['/dest.txt'].Content | Should -Be new
+        @($fake.Files.Keys | Where-Object { $_ -like '*powerscp-backup*' }).Count | Should -Be 0
+        @($fake.Calls | Where-Object { $_[0] -in @('Move','Copy','Remove') } | ForEach-Object { $_[0] }) | Should -Be @('Move','Copy','Remove')
+    }
+    It 'does not attempt replacement when the original cannot be backed up' {
+        $fake.Files['/dest.txt']=[pscustomobject]@{FullName='/dest.txt';Name='dest.txt';IsDirectory=$false}
+        $fake | Add-Member ScriptMethod MoveFile { param($source,$target) throw 'Backup denied' } -Force
+        { Copy-ScpItem -Session $fake -RemotePath '/source.txt' -Destination '/dest.txt' -Force } | Should -Throw '*Backup denied*'
+        $fake.Files.ContainsKey('/dest.txt') | Should -BeTrue
+        @($fake.Calls | Where-Object { $_[0] -in @('Copy','Remove') }).Count | Should -Be 0
+    }
+    It 'reports retained originals when successful replacement cannot clean its backup' {
+        $fake.Files['/dest.txt']=[pscustomobject]@{FullName='/dest.txt';Name='dest.txt';IsDirectory=$false}
+        $fake | Add-Member ScriptMethod RemoveFile { param($path) throw 'Cleanup denied' } -Force
+        $warnings=@()
+        Copy-ScpItem -Session $fake -RemotePath '/source.txt' -Destination '/dest.txt' -Force -WarningVariable warnings -WarningAction SilentlyContinue
+        $warnings.Count | Should -Be 1
+        $warnings[0].ToString() | Should -Match 'Replacement succeeded.*powerscp-backup-'
+    }
+
 }

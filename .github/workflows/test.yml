@@ -1,5 +1,8 @@
 name: PowerShell tests
 on: [push, pull_request]
+env:
+  POWERSHELL_TELEMETRY_OPTOUT: '1'
+  POWERSHELL_UPDATECHECK: 'Off'
 permissions:
   contents: read
 jobs:
@@ -21,4 +24,6 @@ jobs:
           }
           Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
           Import-Module Pester -RequiredVersion 5.7.1
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Force -Scope CurrentUser
+          ./scripts/Test-StaticAnalysis.ps1
           Invoke-Pester ./tests -CI -Output Detailed

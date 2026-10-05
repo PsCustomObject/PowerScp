@@ -6,7 +6,7 @@ BeforeAll {
 Describe 'Public module contract' {
     It 'imports the manifest and exports only public commands' {
         $manifest = Test-ModuleManifest (Join-Path $root 'PowerScp.psd1') -ErrorAction Stop
-        $manifest.Version | Should -Be '1.2.0'
+        $manifest.Version | Should -Be '1.2.1'
         @(Get-Command -Module PowerScp).Count | Should -Be 31
         Get-Command Assert-ScpSession -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }

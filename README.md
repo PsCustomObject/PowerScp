@@ -51,7 +51,7 @@ Closing the session in a `finally` block releases its resources even when an ope
 
 Uploading a directory keeps its folder structure. If you use `-TransferFilesOnly`, the module collects files from the entire directory tree and puts them directly into the destination directory. It rejects duplicate filenames before uploading, since flattening those files would cause them to overwrite one another.
 
-`Receive-ScpItem` downloads files into an existing local directory. Its remote paths can use WinSCP file masks, such as `/outgoing/*.csv`. Add `-LiteralPath` when a filename contains mask characters. To rename one file during transfer, use `-DestinationFileName`; downloads also require `-LiteralPath` for this option.
+`Receive-ScpItem` downloads files into an existing local directory. Its remote paths can use WinSCP file masks, such as `/outgoing/*.csv`. Add `-LiteralPath` when a filename contains mask characters. To rename one file during transfer, use `-DestinationFileName`; downloads also require `-LiteralPath` for this option, a remote file source and a valid Windows destination filename.
 
 Uploads and downloads keep the source files by default. Use `-Remove` when you deliberately want to delete each source after a successful transfer.
 
@@ -116,7 +116,7 @@ $session = $options | New-ScpSession -Name 'archive'
 Get-ScpSession -Name 'archive'
 ```
 
-A name helps when you have several connections open. Names are local to this module instance, and reimporting the module clears its session list. Keep the session reference and close it in `finally` as in the first example. `Remove-ScpSession` disposes it and removes it from the list. `Close-ScpSession` closes the connection while leaving the object available for an explicit `$session.Open($options)` later.
+A name helps when you have several connections open. Names are local to this module instance. Removing or force-reimporting the module disposes tracked sessions and clears its list. Keep the session reference and close it in `finally` as in the first example. `Remove-ScpSession` disposes it and removes it from the list. `Close-ScpSession` closes the connection while leaving the object available for an explicit `$session.Open($options)` later.
 
 `New-ScpSessionOptions` also accepts `-SessionUrl`, for example `ftpes://user@example.org:2121/`. Pass credentials separately rather than putting passwords into URLs. `-SshHostKeyPolicy AcceptNew` offers WinSCP's trust-on-first-use behavior; strict fingerprint checking remains the default. Use `-SecurePrivateKeyPassphrase` for a SecureString key or client-certificate passphrase, and `-TlsClientCertificatePath` for a client certificate.
 
@@ -171,9 +171,9 @@ New-ScpItem -Session $session -RemotePath '/config/settings.json' -Value $json -
 Rename-ScpItem -Session $session -RemotePath '/incoming/report.tmp' -NewName 'report.csv'
 ```
 
-`Set-ScpContent` replaces a file's text. It writes UTF-8 without a byte order mark by default and does not add a newline. `Get-ScpContent` returns lines, or the whole file with `-Raw`. Reading uses WinSCP streaming, which supports SFTP and FTP/FTPS only. Creation and content writes use regular transfers and also work with other protocols supported by the server. File parents must already exist.
+`Set-ScpContent` replaces a file's text. It writes UTF-8 without a byte order mark by default and does not add a newline. Content writes require Binary transfer mode, Overwrite mode and no FileMask. `Get-ScpContent` returns lines, or the whole file with `-Raw`. Reading uses WinSCP streaming, which supports SFTP and FTP/FTPS only. Creation and content writes use regular transfers and also work with other protocols supported by the server. File parents must already exist.
 
-Move, copy and rename refuse to overwrite an existing item unless you pass `-Force`. Force replaces files only; it will not delete an existing destination directory. Replacement removes the old target before the operation, so it is not atomic. Use `-PassThru` to retrieve the resulting metadata.
+Move, copy and rename refuse to overwrite an existing item unless you pass `-Force`. Force replaces files only; it will not delete an existing destination directory. Forced replacement moves the old target to a unique sibling backup before the operation. If replacement fails and the destination is absent, the original is restored. If a partial target exists or restoration fails, the error reports the retained backup path for manual recovery. Successful replacement removes the backup; a cleanup failure emits a warning with its path. This is not atomic, requires rename/delete permissions, and does not lock out other clients. Rename treats the new name as an exact destination and rejects an existing directory. Use `-PassThru` to retrieve the resulting metadata.
 
 ### Permissions and resumable uploads
 
@@ -239,3 +239,5 @@ Invoke-Pester ./tests -CI
 The tests check module loading, connection settings, transfer options and operation behavior. They use the real WinSCP assemblies, with simulated sessions for operations that would otherwise need a server. Since WinSCP's session class cannot be mocked directly, those tests use a temporary copy of the module with the session type annotations removed.
 
 The Windows CI workflow runs the tests in Windows PowerShell 5.1 and the runner's installed PowerShell 7. Local verification has been performed on PowerShell 7.6.6 on macOS. Windows CI and live transfers have not yet been verified for this revision, so testing against your own servers is still needed before a production release.
+
+Static analysis and opt-in live SFTP verification are described in [docs/TESTING.md](docs/TESTING.md).
