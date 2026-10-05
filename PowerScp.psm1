@@ -1,703 +1,105 @@
-﻿function Format-StringPath
-{
-<#
-	.SYNOPSIS
-		Will format string in SCP format.
-	
-	.DESCRIPTION
-		Will format string in SCP format replacing backslashes to slashes.
-	
-	.PARAMETER Path
-		A string representing the path(s) to format.
-	
-	.EXAMPLE
-		PS C:\> Format-StringPath -Path $value1
-#>
-    
-    [OutputType([String])]
-    param
-    (
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [String[]]
-        $Path
-    )
-    
-    process
-    {
-        foreach ($item in $Path)
-        {
-            # Sanitize input
-            if ($item.Contains('\'))
-            {
-                $item = $item.Replace('\', '/')
-            }
-            
-            $item
-        }
+﻿# Load the build appropriate to the PowerShell runtime before resolving WinSCP types.
+$assemblyPath = Join-Path $PSScriptRoot 'lib/WinSCPnet.dll'
+if ($PSEdition -eq 'Core') {
+    $assemblyPath = Join-Path $PSScriptRoot 'lib/netstandard2.0/WinSCPnet.dll'
+}
+if (!(Test-Path -LiteralPath $assemblyPath)) { throw "Missing WinSCP assembly: $assemblyPath. See README.md for dependency setup." }
+Add-Type -Path $assemblyPath -ErrorAction Stop
+
+function Assert-ScpPlatform {
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+        throw 'WinSCP transfers require Windows. PowerShell 7 is supported on Windows.'
     }
 }
-
-function Get-HostFingerPrint
-{
-	<#
-	.SYNOPSIS
-		Cmdlet will retrieve fingerprint of a remote host
-	
-	.DESCRIPTION
-		Cmdlet will retrieve fingerprint of a remote host so that is can be used in other cmdlets to open an WinSCP Session validating remote host identity.
-	
-	.PARAMETER RemoteHost
-		A string representing the host to connect to
-	
-	.PARAMETER Password
-		A string representing the password to use to connect to the remote host.
-	
-	.PARAMETER UserName
-		A string representing the username to use while opening connection to the remote host.
-	
-	.PARAMETER PortNumber
-		An integer representing the port used to establish the connection. 
-		
-		Will default to 21 if not specified.
-	
-	.PARAMETER ConnectionTimeOut
-		A timespan representing the timeout, in secods, before dropping connection. 
-		
-		If not specified it will default to 15 seconds.
-	
-	.PARAMETER Algorithm
-		Specifies the host fingerprint to retrive, possible values are:
-		
-		- SHA-256
-		- MD5
-	
-	.PARAMETER Protocol
-		A string representing the protocol to use to open connection possible values are:
-		
-		- Ftp
-		- Scp
-		- Webdav
-	
-	.EXAMPLE
-				PS C:\> Get-HostFingerPrint -RemoteHost 'Value1' -Password 'Value2' -UserName 'Value3'
-	
-	.OUTPUTS
-		string, string
-	
-	.NOTES
-		Additional information about the function.
-#>
-    
-    [CmdletBinding(DefaultParameterSetName = 'UserNamePassword')]
-    [OutputType([string], ParameterSetName = 'UserNamePassword')]
-    [OutputType([string], ParameterSetName = 'Credentials')]
-    [OutputType([string])]
-    param
-    (
-        [Parameter(ParameterSetName = 'Credentials',
-                   Mandatory = $true)]
-        [Parameter(ParameterSetName = 'UserNamePassword',
-                   Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [Alias('Host', 'Server', 'RemoteServer')]
-        [string]
-        $RemoteHost,
-        [Parameter(ParameterSetName = 'UserNamePassword',
-                   Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $Password,
-        [Parameter(ParameterSetName = 'UserNamePassword',
-                   Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $UserName,
-        [Parameter(ParameterSetName = 'Credentials')]
-        [Parameter(ParameterSetName = 'UserNamePassword')]
-        [ValidateNotNullOrEmpty()]
-        [int]
-        $PortNumber = 21,
-        [Parameter(ParameterSetName = 'Credentials')]
-        [Parameter(ParameterSetName = 'UserNamePassword')]
-        [timespan]
-        $ConnectionTimeOut = (New-TimeSpan -Seconds 15),
-        [Parameter(ParameterSetName = 'Credentials')]
-        [Parameter(ParameterSetName = 'UserNamePassword')]
-        [ValidateNotNullOrEmpty()]
-        [ValidateSet('SHA-256', 'MD5', IgnoreCase = $true)]
-        [string]
-        $Algorithm = 'SHA-256',
-        [Parameter(ParameterSetName = 'Credentials')]
-        [Parameter(ParameterSetName = 'UserNamePassword')]
-        [ValidateSet('Ftp', 'Scp', 'Webdav', IgnoreCase = $true)]
-        [string]
-        $Protocol = 'Scp'
-    )
-    
-    # Add assembly
-    Add-Type -Path "$PSScriptRoot\lib\WinSCPnet.dll"
-    
-    # Create Session Options hash
-    [hashtable]$sessionOptions = @{ }
-    
-    # Create Session Object hash
-    [hashtable]$sesionObjectParameters = @{ }
-    
-    # Get parameterset
-    switch ($PsCmdlet.ParameterSetName)
-    {
-        'UsernamePassword'
-        {
-            # Add paramters to object
-            $sessionOptions.Add('UserName', $UserName)
-            $sessionOptions.Add('Password', $UserPassword)
-            
-            break
-        }
-        
-        'Credentials'
-        {
-            # Extract username and password and add to hash
-            $sessionOptions.Add('UserName', $Credentials.UserName)
-            $sessionOptions.Add('SecurePassword', $Credentials.Password)
-            
-            break
-        }
-    }
-    
-    # Add mandatory parameters to Session Options
-    $sessionOptions.Add('HostName', $RemoteHost)
-    $sessionOptions.Add('PortNumber', $ServerPort)
-    $sessionOptions.Add('Timeout', $ConnectionTimeOut)
-    
-    # Add mandatory paramters to Session Object
-    $sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\bin\winscp.exe")
-    
-    # Create session options object
-    $paramNewObject = @{
-        TypeName = 'WinSCP.SessionOptions'
-        Property = $sessionOptions
-    }
-    
-    [WinSCP.SessionOptions]$scpSessionOptions = New-Object @paramNewObject
-    
-    # # Create Session Object
-    $paramNewObject = @{
-        TypeName = 'WinSCP.Session'
-        Property = $sesionObjectParameters
-    }
-    
-    [WinSCP.Session]$sessionObject = New-Object @paramNewObject
-    
-    try
-    {
-        return $sessionObject.ScanFingerprint($scpSessionOptions, $Algorithm)
-    }
-    catch
-    {
-        # Save exception message
-        [string]$reportedException = $_.Exception.Message
-        
-        Write-Error -Message $reportedException
-        
-        return $null
-    }
-    finally
-    {
-        $sessionObject.Dispose()
-    }
+function Assert-ScpSession {
+    param($Session)
+    if ($null -eq $Session -or !$Session.Opened) { throw 'The WinSCP Session is not in an open state' }
 }
-
-function Get-ScpChildItem
-{
-    <#
-        .SYNOPSIS
-            Cmdlet will return items on a remote server.
-        
-        .DESCRIPTION
-            Cmdlet will return items on a remote session where an SCP Session has been established.
-        
-        .PARAMETER Session
-            A WinSCP.Session object containing information about the remote host.
-        
-        .PARAMETER RemotePath
-            A string representing a folder on the remote server. If path does not exist script will return a $null value and print an error.
-        
-        .PARAMETER Filter
-            Windows wildcard to filter files, if not spcecified will default to $null returning all files. If a filename is specified only that item will be returned.
-        
-        .PARAMETER Recurse
-            When specified it will cause function to recurse in any subfolder in the remote path
-        
-        .PARAMETER Depth
-            Paramter can only be used when the -Recurse parameter is also specified and is used to limite the number of levels, folder, function will recurse in.
-            
-            If -Recurse is used and -Depth is not specified it will default to 0 meaning no recursion limit will be applied.
-        
-        .PARAMETER FilesOnly
-            When specified it will list/return files only omitting any matching directory.
-        
-        .EXAMPLE
-            PS C:\> Get-ScpChildItem -Session $scpSession -FilesOnly
-        
-        .OUTPUTS
-            WinSCP.RemoteFileInfo, System.Null
-    #>
-    
-    [CmdletBinding(DefaultParameterSetName = 'NoRecurse')]
-    [OutputType([array], ParameterSetName = 'Recurse')]
-    [OutputType([array], ParameterSetName = 'NoRecurse')]
-    [OutputType([WinSCP.RemoteFileInfo])]
-    param
-    (
-        [Parameter(ParameterSetName = 'NoRecurse',
-                   Mandatory = $true,
-                   ValueFromPipeline = $true,
-                   ValueFromPipelineByPropertyName = $true)]
-        [Parameter(ParameterSetName = 'Recurse')]
-        [SupportsWildcards()]
-        [WinSCP.Session]
-        $Session,
-        [Parameter(ParameterSetName = 'NoRecurse',
-                   Mandatory = $true)]
-        [Parameter(ParameterSetName = 'Recurse')]
-        [ValidateNotNullOrEmpty()]
-        [string[]]
-        $RemotePath,
-        [Parameter(ParameterSetName = 'NoRecurse')]
-        [Parameter(ParameterSetName = 'Recurse')]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $Filter = $null,
-        [Parameter(ParameterSetName = 'Recurse')]
-        [switch]
-        $Recurse,
-        [Parameter(ParameterSetName = 'Recurse')]
-        [int]
-        $Depth = 0,
-        [Parameter(ParameterSetName = 'Recurse')]
-        [Parameter(ParameterSetName = 'NoRecurse')]
-        [switch]
-        $FilesOnly
-    )
-    
-    begin
-    {
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
-    }
-    process
-    {
-        switch ($PsCmdlet.ParameterSetName)
-        {
-            'Recurse'
-            {
-                # Recurse into subfolders
-                [WinSCP.EnumerationOptions]$enumOptions = [WinSCP.EnumerationOptions]::AllDirectories -bor [WinSCP.EnumerationOptions]::MatchDirectories
-            }
-            'NoRecurse'
-            {
-                # Enumerate matching directories without recursing
-                [WinSCP.EnumerationOptions]$enumOptions = [WinSCP.EnumerationOptions]::None -bor [WinSCP.EnumerationOptions]::MatchDirectories
-            }
-        }
-        
-        foreach ($path in $RemotePath)
-        {
-            # Format path for SCP session
-            [string]$path = Format-StringPath -Path $path
-            
-            # Validate path exists
-            if (!(Test-ScpPath -RemotePath $path -Session $Session))
-            {
-                Write-Error -Message "Cannot find path: $path because it does not exist"
-                
-                continue
-            }
-            
-            switch ($PSBoundParameters)
-            {
-                'FilesOnly'
-                {
-                    # Enumerate files only
-                    [WinSCP.EnumerationOptions]$enumOptions = [WinSCP.EnumerationOptions]::None
-                }
-            }
-            
-            try
-            {
-                # Get matching items
-                $Session.EnumerateRemoteFiles($path, $Filter, $enumOptions)
-            }
-            catch
-            {
-                # Save exception message
-                [string]$reportedException = $_.Exception.Message
-                
-                Write-Error -Message $reportedException
-                
-                return $null
-            }
-        }
-    }
-}
-
-function Get-ScpItem
-{
-    <#
-        .SYNOPSIS
-            Cmdlet will return items on a remote server.
-        
-        .DESCRIPTION
-            Cmdlet will return items on a remote session where an SCP Session has been established.
-        
-        .PARAMETER Session
-            A WinSCP.Session object containing information about the remote host. 
-        
-            Session must be in open state or an exception will be thrown.
-        
-        .PARAMETER RemotePath
-            A string representing a folder on the remote server. If path does not exist script will return a $null value and print an error.
-        
-        .PARAMETER Filter
-            Windows wildcard to filter files, if not spcecified will default to $null returning all files. If a filename is specified only that item will be returned.
-        
-        .PARAMETER Recurse
-            When specified it will cause cmdlet to recurse in any subfolder in the remote path
-        
-        .PARAMETER Depth
-            Paramter can only be used when the -Recurse parameter is also specified and is used to limite the number of levels, folder, cmdlet will recurse in.
-            
-            If -Recurse is used and -Depth is not specified it will default to 0 meaning no recursion limit will be applied.
-        
-        .PARAMETER FilesOnly
-            When specified it will list/return files only omitting any matching directory.
-        
-        .EXAMPLE
-            PS C:\> Get-ScpChildItem -Session $scpSession -FilesOnly
-        
-        .OUTPUTS
-            WinSCP.RemoteFileInfo, System.Null
-        
-        .NOTES
-            Additional information about the function.
-    #>
-    
-    [CmdletBinding(DefaultParameterSetName = 'Recurse')]
-    [OutputType([array], ParameterSetName = 'Recurse')]
-    [OutputType([array], ParameterSetName = 'NoRecurse')]
-    [OutputType([WinSCP.RemoteFileInfo])]
-    param
-    (
-        [Parameter(ParameterSetName = 'NoRecurse',
-                   Mandatory = $true,
-                   ValueFromPipeline = $true,
-                   ValueFromPipelineByPropertyName = $true)]
-        [Parameter(ParameterSetName = 'Recurse')]
-        [SupportsWildcards()]
-        [WinSCP.Session]
-        $Session,
-        [Parameter(ParameterSetName = 'NoRecurse',
-                   Mandatory = $true)]
-        [Parameter(ParameterSetName = 'Recurse',
-                   Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string[]]
-        $RemotePath,
-        [Parameter(ParameterSetName = 'NoRecurse')]
-        [Parameter(ParameterSetName = 'Recurse')]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $Filter = $null,
-        [Parameter(ParameterSetName = 'Recurse')]
-        [switch]
-        $Recurse,
-        [Parameter(ParameterSetName = 'Recurse')]
-        [int]
-        $Depth = 0,
-        [Parameter(ParameterSetName = 'Recurse')]
-        [Parameter(ParameterSetName = 'NoRecurse')]
-        [switch]
-        $FilesOnly
-    )
-    
-    begin
-    {
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
-    }
-    process
-    {
-        switch ($PsCmdlet.ParameterSetName)
-        {
-            'Recurse'
-            {
-                # Recurse into subfolders
-                [WinSCP.EnumerationOptions]$enumOptions = [WinSCP.EnumerationOptions]::AllDirectories -bor [WinSCP.EnumerationOptions]::MatchDirectories
-            }
-            'NoRecurse'
-            {
-                # Enumerate matching directories without recursing
-                [WinSCP.EnumerationOptions]$enumOptions = [WinSCP.EnumerationOptions]::None -bor [WinSCP.EnumerationOptions]::MatchDirectories
-            }
-        }
-        
-        foreach ($path in $RemotePath)
-        {
-            # Format path for SCP session
-            [string]$path = Format-StringPath -Path $path
-            
-            # Validate path exists
-            if (!(Test-ScpPath -RemotePath $path -Session $Session))
-            {
-                Write-Warning -Message "Cannot process $path because it does not exist"
-                
-                continue
-            }
-            
-            switch ($PSBoundParameters)
-            {
-                'FilesOnly'
-                {
-                    # Enumerate files only
-                    [WinSCP.EnumerationOptions]$enumOptions = [WinSCP.EnumerationOptions]::None
-                }
-            }
-            
-            try
-            {
-                # Get matching items
-                $Session.EnumerateRemoteFiles($path, $Filter, $enumOptions)
-            }
-            catch
-            {
-                # Save exception message
-                [string]$reportedException = $_.Exception.Message
-                
-                Write-Error -Message $reportedException
-                
-                return $null
-            }
-        }
-    }
-}
-
-function Get-ScpItemCheckSum
-{
-	<#
-	.SYNOPSIS
-		Cmdlet will get checksum of an item on remote host.
-	
-	.DESCRIPTION
-		Cmdlet will get checksum of an item on remote host to which an SCP session has been established.
-	
-	.PARAMETER Session
-		A WinSCP.Session object containing information about the remote host. Session must be in open state.
-	
-	.PARAMETER HashAlgorithm
-		Specifies the algorithm to use when calculating item checksum.
-	
-	.PARAMETER ItemName
-		A string representing the name of the item for which checksum should be calculated.
-	
-	.EXAMPLE
-		PS C:\> Get-ScpItemCheckSum -Session $value1
-#>
-    
+function Format-StringPath {
     [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory = $true,
-                   ValueFromPipeline = $true)]
-        [WinSCP.Session]
-        $Session,
-        [SupportsWildcards()]
-        [ValidateSet('md2', 'md5', 'sha-1', 'sha-224', 'sha-256', 'sha-384', 'sha-512', 'shake128', 'shake256', IgnoreCase = $true)]
-        [string]
-        $HashAlgorithm = 'md5',
-        [Parameter(Mandatory = $true)]
-        [string]
-        $ItemName
-    )
-    
-    begin
-    {
-        # Check a session is open
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
-    }
-    process
-    {
-        # Format path for SCP session
-        [string]$path = Format-StringPath -Path $path
-        
-        # Validate path is valid
-        if (!(Test-ScpPath -RemotePath $path -Session $Session))
-        {
-            Write-Error -Message "Cannot find path: $path because it does not exist"
-            
-            return $null
-        }
-        
-        # Check path exists
-        if (Test-ScpPath -Session $Session -RemotePath $ItemName)
-        {
-            try
-            {
-                # Return item checksum
-                return ($Session.CalculateFileChecksum($HashAlgorithm, $path))
-            }
-            catch
-            {
-                # Save exception message
-                [string]$reportedException = $_.Exception.Message
-                
-                Write-Error -Message $reportedException
-                
-                return $null
-            }
-        }
-        else
-        {
-            Write-Error -Message "Cannot find item because $ItemName does not exist"
-        }
-    }
+    [OutputType([string])]
+    param([Parameter(Mandatory, ValueFromPipeline)][string[]]$Path)
+    process { foreach ($item in $Path) { $item.Replace('\', '/') } }
 }
-
+function New-ScpSessionObject {
+    param([string]$SessionLogPath, [string]$DebugLogPath, [int]$DebugLevel = 0,
+          [timespan]$ReconnectTime = [timespan]::FromSeconds(120))
+    Assert-ScpPlatform
+    $session = New-Object WinSCP.Session
+    $session.ExecutablePath = Join-Path $PSScriptRoot 'bin/WinSCP.exe'
+    $session.ReconnectTime = $ReconnectTime
+    $session.DebugLogLevel = $DebugLevel
+    if ($SessionLogPath) { $session.SessionLogPath = $SessionLogPath }
+    if ($DebugLogPath) { $session.DebugLogPath = $DebugLogPath }
+    $session
+}
+function New-ScpSessionOptions {
+    # Shared by connection creation and fingerprint scanning. Extra common parameters are ignored.
+    param([string]$RemoteHost, [string]$UserName, [string]$UserPassword, [pscredential]$Credentials,
+          [WinSCP.Protocol]$Protocol = 'Scp', [int]$ServerPort = 0,
+          [timespan]$ConnectionTimeOut = [timespan]::FromSeconds(15),
+          [switch]$NoSshKeyCheck, [switch]$NoTlsCheck, [string[]]$SshHostKeyFingerprint,
+          [string]$SshKeyPath, [string]$SshKeyPassword, [switch]$NoSSHKeyPassword,
+          [WinSCP.FtpMode]$FtpMode = 'Passive', [WinSCP.FtpSecure]$FtpSecure = 'None',
+          [switch]$WebDavSecure, [string]$WebDavRoot,
+          [string]$SessionLogPath, [string]$DebugLogPath, [int]$DebugLevel,
+          [timespan]$ReconnectTime, [switch]$Scan,
+          [string]$TlsHostCertificateFingerprint, [hashtable]$RawSettings)
+    if ($ConnectionTimeOut -le [timespan]::Zero) { throw 'ConnectionTimeOut must be positive.' }
+    if ($SshKeyPassword -and !$SshKeyPath) { throw 'SshKeyPassword requires SshKeyPath.' }
+    if (($WebDavSecure -or $WebDavRoot) -and $Protocol -ne 'Webdav') { throw 'WebDAV options require Protocol Webdav.' }
+    if (!$Scan -and $Protocol -in @('Scp','Sftp') -and !$NoSshKeyCheck -and !$SshHostKeyFingerprint) {
+        throw 'Specify SshHostKeyFingerprint or explicitly opt out with NoSshKeyCheck.'
+    }
+    $options = New-Object WinSCP.SessionOptions
+    $options.HostName = $RemoteHost
+    $options.Protocol = $Protocol
+    $options.PortNumber = $ServerPort
+    $options.Timeout = $ConnectionTimeOut
+    if ($Credentials) { $options.UserName = $Credentials.UserName; $options.SecurePassword = $Credentials.Password }
+    else { $options.UserName = $UserName; $options.Password = $UserPassword }
+    $options.GiveUpSecurityAndAcceptAnySshHostKey = [bool]$NoSshKeyCheck
+    $options.GiveUpSecurityAndAcceptAnyTlsHostCertificate = [bool]$NoTlsCheck
+    if ($SshHostKeyFingerprint) { $options.SshHostKeyFingerprint = $SshHostKeyFingerprint -join ';' }
+    if ($SshKeyPath) { $options.SshPrivateKeyPath = (Resolve-Path -LiteralPath $SshKeyPath -ErrorAction Stop).ProviderPath }
+    if ($SshKeyPassword) { $options.PrivateKeyPassphrase = $SshKeyPassword }
+    if ($TlsHostCertificateFingerprint) { $options.TlsHostCertificateFingerprint = $TlsHostCertificateFingerprint }
+    foreach ($key in $RawSettings.Keys) { $options.AddRawSettings([string]$key,[string]$RawSettings[$key]) }
+    $options.FtpMode = $FtpMode
+    $options.FtpSecure = $FtpSecure
+    $options.WebdavSecure = [bool]$WebDavSecure
+    if ($WebDavRoot) { $options.RootPath = $WebDavRoot }
+    $options
+}
+function Get-HostFingerPrint {
+    <# .SYNOPSIS
+    Scan a host fingerprint. Verify it independently before trusting it for a connection.
+    #>
+    [CmdletBinding(DefaultParameterSetName='UserNamePassword')]
+    param(
+        [Parameter(Mandatory)][Alias('Host','Server','RemoteServer')][string]$RemoteHost,
+        [Parameter(ParameterSetName='UserNamePassword')][string]$UserName,
+        [Parameter(ParameterSetName='UserNamePassword')][Alias('UserPassword')][string]$Password,
+        [Parameter(Mandatory,ParameterSetName='Credentials')][pscredential]$Credentials,
+        [ValidateRange(0,65535)][int]$PortNumber = 0,
+        [timespan]$ConnectionTimeOut = [timespan]::FromSeconds(15),
+        [ValidateSet('SHA-256','MD5')][string]$Algorithm = 'SHA-256',
+        [ValidateSet('Sftp','Scp','Ftp','Webdav','S3')][string]$Protocol = 'Scp',
+        [WinSCP.FtpSecure]$FtpSecure = 'None', [switch]$WebDavSecure
+    )
+    $options = New-ScpSessionOptions -RemoteHost $RemoteHost -UserName $UserName -UserPassword $Password -Credentials $Credentials -ServerPort $PortNumber -Protocol $Protocol -ConnectionTimeOut $ConnectionTimeOut -FtpSecure $FtpSecure -WebDavSecure:$WebDavSecure -Scan
+    $session = New-ScpSessionObject
+    try { $session.ScanFingerprint($options, $Algorithm) } finally { $session.Dispose() }
+}
 function New-ScpSession
 {
-	<#
-	.SYNOPSIS
-		Cmdlet will create a new WinSCP.Session object.
-	
-	.DESCRIPTION
-		Cmdlet is used to create a new WinSCP.Session via one of the supported protocols.
-	
-	.PARAMETER RemoteHost
-		A string representing the remote host to connect to.
-		
-		Parameter is mandatory and cannot be omitted.
-	
-	.PARAMETER NoSshKeyCheck
-		When parameter is used will PowerScp will skip verification of remote host SSH key for example when connecting to a known host.
-		
-		Switch should be used only in exceptional cases when connecting to known or internal hosts as it will compromise connection security.
-	
-	.PARAMETER NoTlsCheck
-		When parameter is used PowerScp will skip vericication of remote host TLS/SSL Certificate for example wehn connecting to a known host.
-		
-		Switch should be used only in exceptional cases when connecting to known or internal hosts as it will compromise connection security.
-		
-		Use when connecting to FTPS/WebDAVS servers.
-	
-	.PARAMETER ServerPort
-		An Int number representing the port number to use establish the connection if not specified default value of 22 (SCP) will be used.
-		
-		Allowed values are 0 - 65535
-	
-	.PARAMETER SshKeyPath
-		A description of the SshKeyPath parameter.
-	
-	.PARAMETER Protocol
-		When parameter is used a protocol to be used in the connection can be specified. If parameter is not used default protocol is set to SCP
-	
-	.PARAMETER FtpMode
-		Specify the FTP operation mdoe either Active or Passive.
-		
-		If not specified it will default to Passive.
-		
-		Valid values are:
-		
-		- Active
-		- Passive (Default)
-	
-	.PARAMETER FtpSecure
-		By default set to None specifies the type of security the client should used to FTPS servers.
-		
-		Valid values are:
-		
-		- None (Default)
-		- Implicit
-		- Explicit
-	
-	.PARAMETER ConnectionTimeOut
-		A timespan, in seconds, representing the connection timeout. If not specified will defaul to 15 seconds.
-	
-	.PARAMETER WebDavSecure
-		Use WebDAVS (WebDAV over TLS/SSL), instead of WebDAV.
-	
-	.PARAMETER WebDavRoot
-		A string representing the WebDAV root path. This will be deprecated in a future release.
-	
-	.PARAMETER UserName
-		A string representing the username that will be used to authenticate agains the remote host.
-	
-	.PARAMETER UserPassword
-		A string representing the password used to connect to the remote host.
-	
-	.PARAMETER SshHostKeyFingerprint
-		A string representing ingerprint of SSH server host key (or several alternative fingerprints separated by semicolon).
-		
-		It makes WinSCP automatically accept host key with the fingerprint. Use SHA-256 fingerprint of the host key.
-		
-		Mandatory for SFTP/SCP protocol unless the -NoSshKeyCheck parameter is used.
-	
-	.PARAMETER Credentials
-		A credential object to be used to authenticate against the remote host in place of the clear text Username and Password
-	
-	.PARAMETER SshKeyPassword
-		Passphrase for encrypted private keys and client certificates. Must be specified when using -PrivateKeyPath parameter.
-	
-	.PARAMETER SessionLogPath
-		A string representing the path to store session log file to. Default null means no session log file is created.
-	
-	.PARAMETER DebugLevel
-		An integer representing verbosity of debug log. If not specified default to 0 which means no debug logging.
-		
-		Possible values are 0 (No logging), 1 (Medium logging) and 2 (Verbose logging).
-	
-	.PARAMETER DebugLogPath
-		A string representing path to store assembly debug log to. Default null means no debug log file is created.
-	
-	.PARAMETER ReconnectTime
-		Time, in seconds, to try reconnecting broken sessions. Default is 120 seconds.
-	
-	.PARAMETER NoSSHKeyPassword
-		A description of the NoSSHKeyPassword parameter.
-	
-	.PARAMETER PrivateKeyPath
-		A string representing the path to a file containing an SSH private key used for authentication with remote host.
-	
-	.EXAMPLE
-		PS C:\> New-ScpSession -RemoteHost 'Value1'
-	
-	.OUTPUTS
-		WinSCP.Session
-	
-	.NOTES
-		Function is intended as helper for other module's function creating the WinSCP.Session object used by all other functions for 
-        donwload/upload/management of data on remote hosts.
-#>
-    
+    <# .SYNOPSIS
+    Open a Windows WinSCP session using credentials or a username and password.
+    .DESCRIPTION
+    Supports SFTP, SCP, FTP/FTPS, WebDAV/WebDAVS and S3. SSH connections require
+    a verified fingerprint unless NoSshKeyCheck is explicitly enabled. Port zero
+    selects the protocol default. Unencrypted private keys require no passphrase.
+    #>
     [CmdletBinding(DefaultParameterSetName = 'UsernamePassword',
                    HelpUri = 'https://github.com/PsCustomObject/PowerScp/wiki/New-ScpSession')]
     [OutputType([WinSCP.Session], ParameterSetName = 'UsernamePassword')]
@@ -729,7 +131,7 @@ function New-ScpSession
         [ValidateRange(0, 65535)]
         [Alias('Port', 'RemoteHostPort')]
         [int]
-        $ServerPort = 22,
+        $ServerPort = 0,
         [Parameter(ParameterSetName = 'Credentials')]
         [Parameter(ParameterSetName = 'UsernamePassword')]
         [ValidateScript({ Test-Path $_ })]
@@ -740,10 +142,10 @@ function New-ScpSession
         [Parameter(ParameterSetName = 'Credentials')]
         [Parameter(ParameterSetName = 'UsernamePassword')]
         [ValidateNotNullOrEmpty()]
-        [ValidateSet('Ftp', 'Scp', 'Webdav', 'S3', IgnoreCase = $true)]
+        [ValidateSet('Sftp', 'Ftp', 'Scp', 'Webdav', 'S3', IgnoreCase = $true)]
         [Alias('ConnectionProtocol')]
         [WinSCP.Protocol]
-        $Protocol,
+        $Protocol = 'Scp',
         [Parameter(ParameterSetName = 'Credentials')]
         [Parameter(ParameterSetName = 'UsernamePassword')]
         [WinSCP.FtpMode]
@@ -773,9 +175,8 @@ function New-ScpSession
         [ValidateNotNullOrEmpty()]
         [string]
         $UserName,
-        [Parameter(ParameterSetName = 'UsernamePassword',
-                   Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
+        [Parameter(ParameterSetName = 'UsernamePassword')]
+        [AllowEmptyString()]
         [string]
         $UserPassword,
         [Parameter(ParameterSetName = 'Credentials')]
@@ -810,959 +211,365 @@ function New-ScpSession
         [Parameter(ParameterSetName = 'UsernamePassword')]
         [ValidateNotNullOrEmpty()]
         [timespan]
-        $ReconnectTime = 120,
+        $ReconnectTime = [timespan]::FromSeconds(120),
         [Parameter(ParameterSetName = 'Credentials')]
         [Parameter(ParameterSetName = 'UsernamePassword')]
         [switch]
-        $NoSSHKeyPassword
+        $NoSSHKeyPassword,
+        [string]$TlsHostCertificateFingerprint,
+        [hashtable]$RawSettings
     )
-    
-    # Create Session Options hash
-    [hashtable]$sessionOptions = @{ }
-    
-    # Create Session Object hash
-    [hashtable]$sesionObjectParameters = @{ }
-    
-    # Get parameterset
-    switch ($PsCmdlet.ParameterSetName)
-    {
-        'UsernamePassword'
-        {
-            # Add paramters to object
-            $sessionOptions.Add('UserName', $UserName)
-            $sessionOptions.Add('Password', $UserPassword)
-            
-            break
-        }
-        
-        'Credentials'
-        {
-            # Extract username and password and add to hash
-            $sessionOptions.Add('UserName', $Credentials.UserName)
-            $sessionOptions.Add('SecurePassword', $Credentials.Password)
-            
-            break
-        }
-    }
-    
-    # Get cmdlet parameters
-    foreach ($key in $PSBoundParameters.Keys)
-    {
-        switch ($key)
-        {
-            'NoSshKeyCheck'
-            {
-                # Skip host fingerprint check
-                $sessionOptions.Add('GiveUpSecurityAndAcceptAnySshHostKey', $true)
-                
-                break
-            }
-            'NoTlsCheck'
-            {
-                # Skip host TLS check
-                $sessionOptions.Add('GiveUpSecurityAndAcceptAnyTlsHostCertificate', $true)
-                
-                break
-            }
-            'SshKeyPath'
-            {
-                # Check additional mandatory parameter is present
-                if (([string]::IsNullOrEmpty($SshKeyPassword) -eq $true) -and
-                    (-not $NoSSHKeyPassword))
-                {
-                    throw 'Parameter -PrivateKeyPassphrase is mandatory with -SshPrivateKeyPath'
-                    
-                    return $null
-                }
-                elseif ($NoSSHKeyPassword -eq $true)
-                {
-                    # Specify SshKeyPath
-                    $sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
-                }
-                else
-                {
-                    # Specify SshKeyPath and password
-                    $sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
-                    $sessionOptions.Add('PrivateKeyPassphrase', $SshKeyPassword)
-                }
-                
-                break
-            }
-            'SshKeyPassword'
-            {
-                # Check additional mandatory parameter is present
-                if ([string]::IsNullOrEmpty($SshKeyPath) -eq $true)
-                {
-                    throw 'Parameter -SshKeyPath is mandatory with -SshKeyPassword'
-                    
-                    return $null
-                }
-                else
-                {
-                    # Specify SSH Key passphrase
-                    $sessionOptions.Add('PrivateKeyPassphrase', $SshKeyPassword)
-                    $sessionOptions.Add('SshPrivateKeyPath', $SshKeyPath)
-                }
-                
-                break
-            }
-            'SshHostKeyFingerprint'
-            {
-                $sessionOptions.Add('SshHostKeyFingerprint', $SshHostKeyFingerprint)
-            }
-            
-            'WebDavSecure'
-            {
-                if (($Protocol -ne 'Webdav') -or
-                    ($Protocol -ne 'S3'))
-                {
-                    Write-Error -Message 'WebDavSecure can only specified with Protocol WebDav or S3'
-                    
-                    return $null
-                }
-                else
-                {
-                    # Add to options hash
-                    $sessionOptions.Add('WebdavSecure', $true)
-                }
-                
-                break
-            }
-            'WebDavRoot'
-            {
-                if (($Protocol -ne 'Webdav') -or
-                    ($Protocol -ne 'S3'))
-                {
-                    Write-Error -Message 'WebDavSecure can only specified with Protocol WebDav or S3'
-                    
-                    return $null
-                }
-                else
-                {
-                    # Add to options hash
-                    $sessionOptions.Add('WebDavRoot', $true)
-                }
-                
-                break
-            }
-            'SessionLogPath'
-            {
-                $sesionObjectParameters.Add('SessionLogPath', $SessionLogPath)
-                
-                break
-            }
-            'DebugLogPath'
-            {
-                $sesionObjectParameters.Add('DebugLogPath', $DebugLogPath)
-                
-                break
-            }
-        }
-    }
-    
-    # Add mandatory parameters to Session Options
-    $sessionOptions.Add('HostName', $RemoteHost)
-    $sessionOptions.Add('PortNumber', $ServerPort)
-    $sessionOptions.Add('Timeout', $ConnectionTimeOut)
-    
-    # Add mandatory paramters to Session Object
-    $sesionObjectParameters.Add('ExecutablePath', "$PSScriptRoot\bin\winscp.exe")
-    
-    # Create session options object
-    $paramNewObject = @{
-        TypeName = 'WinSCP.SessionOptions'
-        Property = $sessionOptions
-    }
-    
-    [WinSCP.SessionOptions]$scpSessionOptions = New-Object @paramNewObject
-    
-    # Create Session Object
-    $paramNewObject = @{
-        TypeName = 'WinSCP.Session'
-        Property = $sesionObjectParameters
-    }
-    
-    [WinSCP.Session]$sessionObject = New-Object @paramNewObject
-    
-    try
-    {
-        # Open session
-        $sessionObject.Open($scpSessionOptions)
-        
-        return $sessionObject
-    }
-    catch
-    {
-        # Save exception message
-        [string]$reportedException = $_.Exception.Message
-        
-        Write-Error -Message $reportedException
-        
-        return $null
-    }
+
+    $options = New-ScpSessionOptions @PSBoundParameters
+    $sessionObject = New-ScpSessionObject -SessionLogPath $SessionLogPath -DebugLogPath $DebugLogPath -DebugLevel $DebugLevel -ReconnectTime $ReconnectTime
+    try { $sessionObject.Open($options); $sessionObject }
+    catch { $sessionObject.Dispose(); $PSCmdlet.ThrowTerminatingError($_) }
 }
 
-function Remove-ScpItem
-{
-    <#
-        .SYNOPSIS
-            A brief description of the Remove-ScpItem function.
-        
-        .DESCRIPTION
-            A detailed description of the Remove-ScpItem function.
-        
-        .PARAMETER RemotePath
-            A string representing a folder on the remote server. If path does not exist script will return a $null value and print an error.
-        
-        .PARAMETER Session
-            A WinSCP.Session object containing information about the remote host. 
-        
-            Session must be in open state or an exception will be thrown.
-        
-        .EXAMPLE
-            PS C:\> Remove-ScpItem -RemotePath 'value1' -Session $Session
+function Test-ScpSession {
+    <# .SYNOPSIS
+    Return whether a WinSCP session is open.
     #>
-    
-    [CmdletBinding(ConfirmImpact = 'High',
-                   SupportsShouldProcess = $true)]
-    param
-    (
-        [Parameter(Mandatory = $true,
-                   ValueFromPipeline = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string[]]
-        $RemotePath,
-        [Parameter(Mandatory = $true)]
-        [WinSCP.Session]
-        $Session
-    )
-    
-    begin
-    {
-        # Check session status
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
-    }
-    
-    process
-    {
-        foreach ($item in $RemotePath)
-        {
-            # Format path for SCP session
-            [string]$item = Format-StringPath -Path $item
-            
-            # Validate path exists
-            if (!(Test-ScpPath -RemotePath $item -Session $Session))
-            {
-                Write-Warning -Message "Cannot process $item because it does not exist"
-                
-                continue
-            }
-            
-            if ($PSCmdlet.ShouldProcess($item))
-            {
-                try
-                {
-                    # Remove item
-                    [void]($Session.RemoveFiles($item))
-                }
-                catch
-                {
-                    # Save exception message
-                    [string]$reportedException = $_.Exception.Message
-                    
-                    Write-Error -Message $reportedException
-                }
-            }
-        }
-    }
-}
-
-function Remove-ScpSession
-{
-    <#
-    	.SYNOPSIS
-    		Cmdlet will close an SCP Session
-    	
-    	.DESCRIPTION
-    		Cmdlet will close an SCP Session using dispoe() method. A disposed sesison cannot be re-used or re-opened.
-    	
-    	.PARAMETER Session
-    		A WinSCP.Session object.
-    	
-    	.EXAMPLE
-    		PS C:\> Close-ScpSession -Session $value1
-    #>
-    
-    [OutputType([bool])]
-    param
-    (
-        [Parameter(Mandatory = $true,
-                   ValueFromPipeline = $true)]
-        [WinSCP.Session]
-        $Session
-    )
-    
-    begin
-    {
-        # Get arguments from pipeline
-        $sessionValueFromPipeLine = $PSBoundParameters.ContainsKey('Session')
-    }
-    process
-    {
-        try
-        {
-            # Close session
-            $Session.Dispose()
-            
-            return $true
-        }
-        catch
-        {
-            # Save exception
-            [string]$reportedException = $Error[0].Exception.Message
-            
-            Write-Verbose -Message "Reported exeption: $reportedException"
-            
-            return $false
-        }
-    }
-}
-
-function Start-WinScpConsole
-{
-<#
-	.SYNOPSIS
-		Cmdlet will open WinSCP Console.
-	
-	.DESCRIPTION
-		Cmdlet will invoke WinSCP console and will wait till the window is closed before terminating execution.
-	
-	.EXAMPLE
-		PS C:\> Start-WinScpConsole
-#>
-    
-    [OutputType([void])]
-    param ()
-    
-    # Define WinSCP exe path
-    [string]$exePath = "$PSScriptRoot\bin\WinSCP.exe"
-    
-    # Define exe arguments
-    [string]$scpArgs = '/Console'
-    
-    # Launch WinSCP console
-    $paramStartProcess = @{
-        FilePath     = $exePath
-        ArgumentList = $scpArgs
-        Wait         = $true
-    }
-    
-    Start-Process @paramStartProcess
-}
-
-function Test-ScpSession
-{
-    <#
-    	.SYNOPSIS
-    		Test if a WinSCP.Session object is in oppen state.
-    	
-    	.DESCRIPTION
-    		Helper function to test test if a WinSCP.Session object is in open state.
-    	
-    	.PARAMETER Session
-    		A WinSCP.Session object for which status should be checked.
-    	
-    	.EXAMPLE
-    		PS C:\> Test-ScpSession -Session $Session
-    #>
-    
     [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory = $true,
-                   ValueFromPipeline = $true)]
-        [Alias('SCpSession', 'WinScpSession')]
-        [WinSCP.Session]
-        $Session
-    )
-    
-    if ($Session.Opened)
-    {
-        Write-Verbose -Message 'Session is open'
-        
-        return $true
-    }
-    else
-    {
-        Write-Verbose -Message 'Session is not open or session not found'
-        
-        return $false
-    }
-}
-
-function Test-ScpPath
-{
-<#
-	.SYNOPSIS
-		Cmdlet will check if path on a remote WinSCP Session exists.
-	
-	.DESCRIPTION
-		Cmdlet will check if path on a remote WinSCP Session exists.
-	
-	.PARAMETER Session
-		A valid WinSCP.Session object. Requires connection to be in open state.
-	
-	.PARAMETER RemotePath
-		A string representing path on the remote host.
-	
-	.EXAMPLE
-		PS C:\> Test-ScpPath -Session $value1 -RemotePath $value2
-#>
-    
     [OutputType([bool])]
-    param
-    (
-        [Parameter(Mandatory = $true,
-                   ValueFromPipeline = $true)]
-        [WinSCP.Session]
-        $Session,
-        [Parameter(Mandatory = $true,
-                   ValueFromPipelineByPropertyName = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $RemotePath
-    )
-    
-    begin
-    {
-        # Check session state
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
+    param([Parameter(Mandatory,ValueFromPipeline)][AllowNull()][WinSCP.Session]$Session)
+    process { $null -ne $Session -and $Session.Opened }
+}
+function Remove-ScpSession {
+    <# .SYNOPSIS
+    Dispose a session; disposed sessions cannot be reused.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session)
+    process { if ($PSCmdlet.ShouldProcess('WinSCP session','Dispose')) { $Session.Dispose(); $true } }
+}
+function Test-ScpPath {
+    <# .SYNOPSIS
+    Test existence of a literal remote file or directory.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$RemotePath)
+    process {
+        Assert-ScpSession $Session
+        foreach ($path in $RemotePath) { $Session.FileExists((Format-StringPath $path)) }
     }
-    
-    process
-    {
-        # Sanitize input path
-        $RemotePath = Format-StringPath -Path $RemotePath
-        
-        try
-        {
-            # Check if file exists
-            $Session.FileExists($RemotePath)
-        }
-        catch
-        {
-            if ($PSBoundParameters.ContainsKey('Verbose'))
-            {
-                # Save exception message
-                [string]$reportedException = $_.Exception.Message
-                
-                Write-Error -Message $reportedException
-            }
-            
-            return $false
+}
+function Get-ScpItemType {
+    <# .SYNOPSIS
+    Return metadata for literal remote paths, optionally filtering their names.
+    #>
+    [CmdletBinding()]
+    [OutputType([WinSCP.RemoteFileInfo])]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
+          [string]$Filter)
+    process {
+        Assert-ScpSession $Session
+        foreach ($path in $RemotePath) {
+            $item = $Session.GetFileInfo((Format-StringPath $path))
+            if (!$Filter -or $item.Name -like $Filter) { $item }
         }
     }
 }
-
-function Send-ScpItem
-{
-    <#
-        .SYNOPSIS
-            Cmdlet will upload one or more items to a remote host.
-        
-        .DESCRIPTION
-            Cmdlet will upload one or more items to a remote host.
-        
-        .PARAMETER LocalPath
-            A string representing the path on the local machine containing files/folders that will be uploaded to remote host.
-        
-        .PARAMETER TransferOptions
-            A WinSCP.TransferOptions object containing transfer options that will be aplied to current session.
-            
-            Use New-ScpTrnasferOptions to initialize an object of the appropriate type.
-            
-            All transfer options can be applied at runtime via appropriate parameters.
-        
-        .PARAMETER SpeedLimit
-            An integer representing the speed limit that will be applied when transferring data to the remote host.
-        
-        .PARAMETER FileMask
-            Allows the use of wildcard mask to specify relevant file extensions/names.
-        
-        .PARAMETER Permissions
-            An int between 0 and 777 representing permissions that will be applied to uploaded files.
-            
-            Default behavior is inheriting permissions from remote host folder.
-            
-            Permissions are in UNIX octal format for example 400 or 440
-        
-        .PARAMETER OverWriteMode
-            By default if a file with the same name exists on the remote host it will be overwritten.
-            
-            Possible values are:
-            
-            - Overwrite
-            - Resume
-            - Append
-        
-        .PARAMETER PreserveTimeStamp
-            By default timestamp of uploaded files is retained, paramter allows to change this behavior.
-        
-        .PARAMETER TransferMode
-            Parameter allows to specify the type of transfer that will be used.
-        
-        .PARAMETER Session
-            A valid WinSCP.Session object. Requires connection to be in open state.
-        
-        .PARAMETER RemotePath
-            A string representing remote path where files/folders will be uploaded.
-        
-        .PARAMETER TransferFilesOnly
-            By default cmdlet will copy the enter folder structure when a directory is specified. When parameter is used
-            only files contained in the specified directory will be transferred to the remote host recursively.
-        
-        .EXAMPLE
-            PS C:\> Send-ScpItem -Session $Session -RemotePath 'value2'
+function Get-ScpChildItem {
+    <# .SYNOPSIS
+    List remote directory contents, with optional recursion and file filtering.
+    .PARAMETER Depth
+    Maximum subdirectory levels. Zero means unlimited when Recurse is set.
     #>
-    
-    [CmdletBinding(DefaultParameterSetName = 'RuntimeTransferOptions',
-                   SupportsShouldProcess = $true)]
-    param
-    (
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [Parameter(ParameterSetName = 'TransferOptionsObject',
-                   Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string[]]
-        $LocalPath,
-        [Parameter(ParameterSetName = 'TransferOptionsObject')]
-        [ValidateNotNullOrEmpty()]
-        [WinSCP.TransferOptions]
-        $TransferOptions,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [ValidateNotNullOrEmpty()]
-        [int]
-        $SpeedLimit = 0,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $FileMask,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [ValidateNotNullOrEmpty()]
-        [ValidateRange(0, 777)]
-        [int]
-        $Permissions,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [ValidateNotNullOrEmpty()]
-        [ValidateSet('Overwrite', 'Resume', 'Append', IgnoreCase = $true)]
-        [string]
-        $OverWriteMode,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [ValidateNotNullOrEmpty()]
-        [bool]
-        $PreserveTimeStamp = $True,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [ValidateNotNullOrEmpty()]
-        [ValidateSet('Automatic', 'Binary', 'Text', IgnoreCase = $true)]
-        [string]
-        $TransferMode = 'Automatic',
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions',
-                   Mandatory = $true)]
-        [Parameter(ParameterSetName = 'TransferOptionsObject')]
-        [WinSCP.Session]
-        $Session,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions',
-                   Mandatory = $true)]
-        [Parameter(ParameterSetName = 'TransferOptionsObject')]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $RemotePath,
-        [Parameter(ParameterSetName = 'RuntimeTransferOptions')]
-        [Parameter(ParameterSetName = 'TransferOptionsObject')]
-        [switch]
-        $TransferFilesOnly
-    )
-    
-    begin
-    {
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
-    }
-    
-    process
-    {
-        switch ($PsCmdlet.ParameterSetName)
-        {
-            'TransferOptionsObject'
-            {
-                $TransferOptions = $TransferOptions
-                
-                break
-            }
-            'RuntimeTransferOptions'
-            {
-                # Create new object
-                $TransferOptions = New-Object -TypeName 'WinSCP.TransferOptions'
-                
-                switch ($PSBoundParameters.Keys)
-                {
-                    'SpeedLimit'
-                    {
-                        # Set specified speed limit
-                        $TransferOptions.'SpeedLimit' = $SpeedLimit
-                        
-                        break
-                    }
-                    'PreserveTimeStamp'
-                    {
-                        # Preserve file TimeStamp
-                        $TransferOptions.'PreserveTimestamp' = $PreserveTimeStamp
-                        
-                        break
-                    }
-                    'OverWriteMode'
-                    {
-                        # Overwrite destination if exists
-                        $TransferOptions.'OverWriteMode' = $OverWriteMode
-                        
-                        break
-                    }
-                    'Permissions'
-                    {
-                        # Set UNIX style permissions
-                        $TransferOptions.'FilePermissions'.'Octal' = $Permissions
-                        
-                        break
-                    }
-                    'FileMask'
-                    {
-                        # Set specified filemask
-                        $TransferOptions.'FileMask' = $FileMask
-                        
-                        break
-                    }
+    [CmdletBinding()]
+    [OutputType([WinSCP.RemoteFileInfo])]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
+          [string]$Filter = '*', [switch]$Recurse,
+          [ValidateRange(0,2147483647)][int]$Depth = 0, [switch]$FilesOnly)
+    process {
+        Assert-ScpSession $Session
+        if ($Depth -gt 0 -and !$Recurse) { throw 'Depth requires Recurse.' }
+        foreach ($path in $RemotePath) {
+            $path = Format-StringPath $path
+            $options = [WinSCP.EnumerationOptions]::None
+            if ($Recurse) { $options = $options -bor [WinSCP.EnumerationOptions]::AllDirectories }
+            if (!$FilesOnly) { $options = $options -bor [WinSCP.EnumerationOptions]::MatchDirectories }
+            if ($Recurse -and $Depth -gt 0) { $root = $Session.GetFileInfo($path).FullName.TrimEnd('/') + '/' }
+            foreach ($item in $Session.EnumerateRemoteFiles($path, $Filter, $options)) {
+                if ($FilesOnly -and $item.IsDirectory) { continue }
+                if ($Recurse -and $Depth -gt 0) {
+                    $relative = $item.FullName.Substring($root.Length)
+                    if (($relative.Trim('/').Split('/').Length - 1) -gt $Depth) { continue }
                 }
-            }
-        }
-        
-        # Validate local paths
-        foreach ($item in $LocalPath)
-        {
-            if (!(Test-Path $item))
-            {
-                Write-Warning -Message "Cannot find path $item because it does not exist"
-                
-                continue
-            }
-            else
-            {
-                if ($isValidPath -eq $false)
-                {
-                    New-ScpDirectory -Session $session -RemotePath
-                }
-                
-                if ($RemotePath.EndsWith('/') -eq $false)
-                {
-                    # Check if destination path exists
-                    [bool]$isValidPath = Test-ScpPath -Session $session -RemotePath $RemotePath
-                    
-                    if ($isValidPath -eq $true)
-                    {
-                        # Check if path is a directory
-                        $paramGetScpItemType = @{
-                            RemotePath = $RemotePath
-                            Session    = $Session
-                        }
-                        
-                        # Check if we should sanitize input string
-                        [bool]$isDirectory = (Get-ScpItemType @paramGetScpItemType).'IsDirectory'
-                        
-                        if ($isDirectory -eq $true)
-                        {
-                            # Append trailing character
-                            $RemotePath = '{0}{1}' -f $RemotePath, '/'
-                        }
-                    }
-                    else
-                    {
-                        if ($RemotePath.EndsWith('/') -eq $false)
-                        {
-                            # Append trailing character
-                            $RemotePath = '{0}{1}' -f $RemotePath, '/'
-                        }
-                        
-                        # Format path for WinSCP
-                        $RemotePath = Format-StringPath -Path $RemotePath
-                        
-                        # Create remote directory
-                        $paramNewScpDirectory = @{
-                            Session        = $session
-                            RemotePath     = $RemotePath
-                            SuppressOutput = $true
-                        }
-                        
-                        New-ScpDirectory @paramNewScpDirectory
-                    }
-                }
-                
-                try
-                {
-                    # Format path for WinSCP
-                    $RemotePath = Format-StringPath -Path $RemotePath
-                    
-                    if ($PSBoundParameters.ContainsKey('TransferFilesOnly'))
-                    {
-                        # Get local item type
-                        [bool]$isDirectory = (Get-Item -Path $item).'PSIsContainer'
-                        
-                        if ($isDirectory)
-                        {
-                            # Get all files in the tree
-                            [array]$filesToTransfer = Get-ChildItem -Path $item -Recurse
-                            
-                            foreach ($file in $filesToTransfer)
-                            {
-                                # Run upload and store job status
-                                $jobStatus = $Session.PutFiles($file.FullName, $RemotePath, $OverWriteMode, $TransferOptions)
-                                
-                                if ($jobStatus.IsSuccess)
-                                {
-                                    Write-Output -InputObject $jobStatus
-                                }
-                                else
-                                {
-                                    Write-Error -Message $jobStatus.Failures[0]
-                                }
-                            }
-                        }
-                        else
-                        {
-                            # Run upload and store job status
-                            $jobStatus = $Session.PutFiles($file, $RemotePath, $OverWriteMode, $TransferOptions)
-                            
-                            if ($jobStatus.IsSuccess)
-                            {
-                                Write-Output -InputObject $jobStatus
-                            }
-                            else
-                            {
-                                Write-Error -Message $jobStatus.Failures[0]
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    Write-Error -Message $Error.Exception.Message
-                }
+                $item
             }
         }
     }
 }
-
-function Test-ScpPath
-{
-    <#
-        .SYNOPSIS
-            Cmdlet will check if a specified path/file exists on the remote host.
-        
-        .DESCRIPTION
-            Cmdlet will check if a specified path/file exists on the remote host.
-        
-        .PARAMETER Session
-            A valid WinSCP.Session object. Requires connection to be in open state.
-        
-        .PARAMETER RemotePath
-            A string representing a valid path on the remote host.
-        
-        .EXAMPLE
-            PS C:\> Test-ScpPath -Session $Session -RemotePath 'value2'
+function Get-ScpItem {
+    <# .SYNOPSIS
+    List remote items. Retains the legacy enumeration behavior of Get-ScpItem.
     #>
-    
-    [CmdletBinding(ConfirmImpact = 'High',
-                   SupportsShouldProcess = $true)]
-    param
-    (
-        [Parameter(Mandatory = $true)]
-        [WinSCP.Session]
-        $Session,
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $RemotePath
-    )
-    
-    begin
-    {
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
-    }
-    
-    process
-    {
-        return $session.FileExists($RemotePath)
+    [CmdletBinding()]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][string[]]$RemotePath, [string]$Filter='*',
+          [switch]$Recurse, [ValidateRange(0,2147483647)][int]$Depth=0, [switch]$FilesOnly)
+    process { Get-ScpChildItem @PSBoundParameters }
+}
+function Get-ScpItemCheckSum {
+    <# .SYNOPSIS
+    Calculate a remote file checksum using a server-supported algorithm.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][Alias('RemotePath')][ValidateNotNullOrEmpty()][string[]]$ItemName,
+          [ValidateSet('md2','md5','sha-1','sha-224','sha-256','sha-384','sha-512','shake128','shake256')][string]$HashAlgorithm='sha-256')
+    process {
+        Assert-ScpSession $Session
+        foreach ($path in $ItemName) { $Session.CalculateFileChecksum($HashAlgorithm,(Format-StringPath $path)) }
     }
 }
-
-function Get-ScpItemType
-{
-    <#
-        .SYNOPSIS
-            Cmdlet will return SCP path properties.
-        
-        .DESCRIPTION
-            Cmdlet will return detailed information about items in the specified remote path.
-            
-        .PARAMETER Session
-            A description of the Session parameter.
-        
-        .PARAMETER RemotePath
-            A description of the RemotePath parameter.
-        
-        .PARAMETER Filter
-            A description of the Filter parameter.
-        
-        .EXAMPLE
-            PS C:\> Get-ScpItemType -Session $value1 -RemotePath 'Value2'
+function New-ScpTransferOptions {
+    <# .SYNOPSIS
+    Construct reusable WinSCP transfer options.
+    .PARAMETER Permissions
+    Unix octal permissions, such as 644, 755 or 0755. Each digit must be 0 through 7.
     #>
-    
-    param
-    (
-        [Parameter(Mandatory = $true)]
-        [WinSCP.Session]
-        $Session,
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $RemotePath,
-        [AllowNull()]
-        [string]
-        $Filter
-    )
-    
-    begin
-    {
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
+    [CmdletBinding()]
+    [OutputType([WinSCP.TransferOptions])]
+    param([ValidateRange(0,2147483647)][int]$SpeedLimit=0, [string]$FileMask,
+          [ValidatePattern('^[0-7]{3,4}$')][string]$Permissions,
+          [ValidateSet('Overwrite','Resume','Append')][string]$OverWriteMode='Overwrite',
+          [bool]$PreserveTimeStamp=$true,
+          [ValidateSet('Automatic','Binary','Ascii','Text')][string]$TransferMode='Binary',
+          [hashtable]$RawSettings)
+    $options = New-Object WinSCP.TransferOptions
+    $options.SpeedLimit = $SpeedLimit
+    $options.FileMask = $FileMask
+    $options.OverwriteMode = $OverWriteMode
+    $options.PreserveTimestamp = $PreserveTimeStamp
+    if ($TransferMode -eq 'Text') { $TransferMode = 'Ascii' }
+    $options.TransferMode = $TransferMode
+    if ($PSBoundParameters.ContainsKey('Permissions')) {
+        $options.FilePermissions = New-Object WinSCP.FilePermissions
+        $options.FilePermissions.Octal = $Permissions
     }
-    
-    process
-    {
-        return $session.GetFileInfo($RemotePath)
-    }
+    foreach ($key in $RawSettings.Keys) { $options.AddRawSettings([string]$key,[string]$RawSettings[$key]) }
+    $options
 }
-
-function New-ScpDirectory
-{
-    <#
-        .SYNOPSIS
-            Cmdlet will create a new directory on the remote host in the specified path.
-        
-        .DESCRIPTION
-            Cmdlet will create a new directory on the remote host in the specified path if the specified directory exists no action will be taken.
-        
-        .PARAMETER Session
-            A valid WinSCP.Session object. Requires connection to be in open state.
-        
-        .PARAMETER RemotePath
-            A string representing the full path underneath which the directory will be created.
-        
-        .PARAMETER SuppressOutput
-            When parameter is specified any error output will be suppressed.
-        
-        .EXAMPLE
-            PS C:\> New-ScpDirectory -Session $Session -RemotePath 'value2'
-    #>
-    
-    param
-    (
-        [Parameter(Mandatory = $true)]
-        [WinSCP.Session]
-        $Session,
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]
-        $RemotePath,
-        [switch]
-        $SuppressOutput
-    )
-    
-    begin
-    {
-        if (Test-ScpSession -Session $Session)
-        {
-            Write-Verbose -Message 'Session is in open state we can continue'
-        }
-        else
-        {
-            throw 'The WinSCP Session is not in an open state'
-        }
+function Resolve-ScpTransferOptions {
+    param([System.Collections.IDictionary]$Parameters)
+    if (($Parameters.Keys -contains 'TransferOptions')) { return $Parameters['TransferOptions'] }
+    $arguments = @{}
+    foreach ($key in @('SpeedLimit','FileMask','Permissions','OverWriteMode','PreserveTimeStamp','TransferMode')) {
+        if (($Parameters.Keys -contains $key)) { $arguments[$key] = $Parameters[$key] }
     }
-    
-    process
-    {
-        # Check if path already exists
-        if (Test-ScpPath -Session $Session -RemotePath $RemotePath)
-        {
-            Write-Warning -Message "Directory $RemotePath already exists on remote host - No action will be taken"
-            
-            return
-        }
-        else
-        {
-            try
-            {
-                # Create directory
-                $Session.CreateDirectory($RemotePath)
-                
-                Write-Verbose -Message 'Directory correctly created'
-                
-                return $true
-            }
-            catch
-            {
-                
-                if ($PSBoundParameters.ContainsKey('SuppressOutput'))
-                {
-                    return $false
+    New-ScpTransferOptions @arguments
+}
+function New-ScpDirectory {
+    <# .SYNOPSIS
+    Create remote directories. Force creates missing parents.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
+          [switch]$Force, [switch]$SuppressOutput)
+    process {
+        Assert-ScpSession $Session
+        foreach ($path in $RemotePath) {
+            $path = Format-StringPath $path
+            try {
+                if ($Session.FileExists($path)) {
+                    if (!$Session.GetFileInfo($path).IsDirectory) { throw "Remote path is a file: $path" }
+                    if (!$SuppressOutput) { $true }
+                    continue
                 }
-                
-                Write-Error -Message $Error.Exception.Message
-                
-                return $false
+                if ($PSCmdlet.ShouldProcess($path,'Create remote directory')) {
+                    if ($Force) {
+                        $parent = [WinSCP.RemotePath]::GetDirectoryName($path.TrimEnd('/'))
+                        if ($parent -and $parent -ne $path -and !$Session.FileExists($parent)) {
+                            New-ScpDirectory -Session $Session -RemotePath $parent -Force -SuppressOutput -ErrorAction Stop
+                        }
+                    }
+                    $Session.CreateDirectory($path)
+                    if (!$SuppressOutput) { $true }
+                }
+            } catch { $PSCmdlet.WriteError($_) }
+        }
+    }
+}
+function Send-ScpItem {
+    <# .SYNOPSIS
+    Upload literal local files or directories to a remote destination directory.
+    .PARAMETER TransferFilesOnly
+    Flatten all files from a local directory tree into the destination. Duplicate names are rejected.
+    .PARAMETER Remove
+    Delete local source files after a successful transfer. Disabled by default.
+    #>
+    [CmdletBinding(SupportsShouldProcess,DefaultParameterSetName='RuntimeTransferOptions')]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$LocalPath,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$RemotePath,
+        [Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+        [Parameter(Mandatory,ParameterSetName='TransferOptionsObject')][ValidateNotNull()][WinSCP.TransferOptions]$TransferOptions,
+        [Parameter(ParameterSetName='RuntimeTransferOptions')][ValidateRange(0,2147483647)][int]$SpeedLimit=0,
+        [Parameter(ParameterSetName='RuntimeTransferOptions')][string]$FileMask,
+        [Parameter(ParameterSetName='RuntimeTransferOptions')][ValidatePattern('^[0-7]{3,4}$')][string]$Permissions,
+        [Parameter(ParameterSetName='RuntimeTransferOptions')][ValidateSet('Overwrite','Resume','Append')][string]$OverWriteMode='Overwrite',
+        [Parameter(ParameterSetName='RuntimeTransferOptions')][bool]$PreserveTimeStamp=$true,
+        [Parameter(ParameterSetName='RuntimeTransferOptions')][ValidateSet('Automatic','Binary','Ascii','Text')][string]$TransferMode='Binary',
+        [switch]$TransferFilesOnly, [switch]$Remove
+    )
+    process {
+        Assert-ScpSession $Session
+        $options = Resolve-ScpTransferOptions $PSBoundParameters
+        $destination = (Format-StringPath $RemotePath).TrimEnd('/') + '/'
+        $sources = @(foreach ($path in $LocalPath) {
+            $item = Get-Item -LiteralPath $path -ErrorAction Stop
+            if ($item.PSProvider.Name -ne 'FileSystem') { throw 'LocalPath must use the FileSystem provider.' }
+            if ($TransferFilesOnly -and $item.PSIsContainer) { Get-ChildItem -LiteralPath $item.FullName -File -Recurse -ErrorAction Stop }
+            else { $item }
+        })
+        if ($TransferFilesOnly) {
+            $duplicates = $sources | Group-Object Name | Where-Object Count -gt 1
+            if ($duplicates) { throw 'TransferFilesOnly would overwrite duplicate filenames in the flattened destination.' }
+        }
+        foreach ($item in $sources) {
+            $action = 'Upload'
+            if ($Remove) { $action = 'Upload and remove local source' }
+            if ($PSCmdlet.ShouldProcess("$($item.FullName) -> $destination", $action)) {
+                New-ScpDirectory -Session $Session -RemotePath $destination -Force -SuppressOutput -ErrorAction Stop
+                $result = $Session.PutFiles([WinSCP.RemotePath]::EscapeFileMask($item.FullName),$destination,[bool]$Remove,$options)
+                $result.Check()
+                $result
             }
         }
     }
+}
+function Receive-ScpItem {
+    <# .SYNOPSIS
+    Download remote file masks into an existing local directory.
+    .PARAMETER Remove
+    Remove remote sources after successful download. Disabled by default.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$LocalPath,
+          [WinSCP.TransferOptions]$TransferOptions=(New-ScpTransferOptions), [switch]$Remove)
+    process {
+        Assert-ScpSession $Session
+        $directory = Get-Item -LiteralPath $LocalPath -ErrorAction Stop
+        if (!$directory.PSIsContainer -or $directory.PSProvider.Name -ne 'FileSystem') { throw 'LocalPath must be an existing filesystem directory.' }
+        $destination = $directory.FullName.TrimEnd([char[]]'\/') + [IO.Path]::DirectorySeparatorChar
+        foreach ($path in $RemotePath) {
+            $action = 'Download'
+            if ($Remove) { $action = 'Download and remove remote source' }
+            if ($PSCmdlet.ShouldProcess("$path -> $destination",$action)) {
+                $result = $Session.GetFiles((Format-StringPath $path),$destination,[bool]$Remove,$TransferOptions)
+                $result.Check()
+                $result
+            }
+        }
+    }
+}
+function Remove-ScpItem {
+    <# .SYNOPSIS
+    Remove literal remote files or directories, including their contents.
+    #>
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact='High')]
+    param([Parameter(Mandatory,ValueFromPipeline)][ValidateNotNullOrEmpty()][string[]]$RemotePath,
+          [Parameter(Mandatory)][WinSCP.Session]$Session)
+    process {
+        Assert-ScpSession $Session
+        foreach ($path in $RemotePath) {
+            $path = Format-StringPath $path
+            if ($PSCmdlet.ShouldProcess($path,'Remove remote item')) {
+                $result = $Session.RemoveFiles([WinSCP.RemotePath]::EscapeFileMask($path))
+                $result.Check()
+                $result
+            }
+        }
+    }
+}
+function Move-ScpItem {
+    <# .SYNOPSIS
+    Move or rename a literal remote item.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$RemotePath,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Destination)
+    process {
+        Assert-ScpSession $Session
+        if ($PSCmdlet.ShouldProcess("$RemotePath -> $Destination",'Move remote item')) {
+            $Session.MoveFile((Format-StringPath $RemotePath),(Format-StringPath $Destination))
+        }
+    }
+}
+function Copy-ScpItem {
+    <# .SYNOPSIS
+    Copy a remote file on servers supporting server-side duplication.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$RemotePath,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Destination)
+    process {
+        Assert-ScpSession $Session
+        if ($PSCmdlet.ShouldProcess("$RemotePath -> $Destination",'Copy remote file')) {
+            $Session.DuplicateFile((Format-StringPath $RemotePath),(Format-StringPath $Destination))
+        }
+    }
+}
+function Invoke-ScpCommand {
+    <# .SYNOPSIS
+    Execute a command on a server supporting shell commands.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Command)
+    process {
+        Assert-ScpSession $Session
+        if ($PSCmdlet.ShouldProcess($Command,'Execute remote command')) {
+            $result = $Session.ExecuteCommand($Command)
+            $result.Check()
+            $result
+        }
+    }
+}
+function Sync-ScpDirectory {
+    <# .SYNOPSIS
+    Synchronize local and remote directories. Removal requires the explicit Remove switch.
+    .PARAMETER Mode
+    Remote uploads changes; Local downloads changes; Both synchronizes in both directions.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory,ValueFromPipeline)][WinSCP.Session]$Session,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$LocalPath,
+          [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$RemotePath,
+          [ValidateSet('Local','Remote','Both')][string]$Mode='Remote',
+          [switch]$Remove, [switch]$Mirror,
+          [WinSCP.SynchronizationCriteria]$Criteria=[WinSCP.SynchronizationCriteria]::Time,
+          [WinSCP.TransferOptions]$TransferOptions=(New-ScpTransferOptions))
+    process {
+        Assert-ScpSession $Session
+        if ($Mode -eq 'Both' -and ($Remove -or $Mirror)) { throw 'Remove and Mirror cannot be used with Mode Both.' }
+        $directory = Get-Item -LiteralPath $LocalPath -ErrorAction Stop
+        if (!$directory.PSIsContainer -or $directory.PSProvider.Name -ne 'FileSystem') { throw 'LocalPath must be an existing filesystem directory.' }
+        if ($PSCmdlet.ShouldProcess("$LocalPath <-> $RemotePath", "Synchronize ($Mode, Remove=$Remove, Mirror=$Mirror)")) {
+            $result = $Session.SynchronizeDirectories([WinSCP.SynchronizationMode]$Mode,$directory.FullName,(Format-StringPath $RemotePath),[bool]$Remove,[bool]$Mirror,$Criteria,$TransferOptions)
+            $result.Check()
+            $result
+        }
+    }
+}
+function Start-WinScpConsole {
+    <# .SYNOPSIS
+    Launch the bundled WinSCP console and wait for it to exit.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+    Assert-ScpPlatform
+    $path = Join-Path $PSScriptRoot 'bin/WinSCP.exe'
+    if ($PSCmdlet.ShouldProcess($path,'Start console')) { Start-Process -FilePath $path -ArgumentList '/console' -Wait }
 }
