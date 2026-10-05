@@ -6,8 +6,8 @@ BeforeAll {
 Describe 'Public module contract' {
     It 'imports the manifest and exports only public commands' {
         $manifest = Test-ModuleManifest (Join-Path $root 'PowerScp.psd1') -ErrorAction Stop
-        $manifest.Version | Should -Be '1.1.0'
-        @(Get-Command -Module PowerScp).Count | Should -Be 20
+        $manifest.Version | Should -Be '1.2.0'
+        @(Get-Command -Module PowerScp).Count | Should -Be 31
         Get-Command Assert-ScpSession -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }
     It 'applies all transfer settings simultaneously' {
@@ -66,7 +66,7 @@ Describe 'Connection options' {
             $options.SshPrivateKeyPath | Should -Be $keyPath
         }
         It 'disposes a failed connection and allows key-only authentication' {
-            $fake = [pscustomobject]@{ Disposed=$false }
+            $fake = [pscustomobject]@{ Disposed=$false; XmlLogPreserve=$false }
             $fake | Add-Member ScriptMethod Open { param($options) throw 'Open failed' }
             $fake | Add-Member ScriptMethod Dispose { $this.Disposed=$true }
             Mock New-ScpSessionObject { $fake }
@@ -223,6 +223,21 @@ Describe 'Transfer and enumeration regressions' {
         Send-ScpItem -Session $fake -LocalPath $local -RemotePath '/upload' -TransferOptions $options | Out-Null
         $call=@($fake.Calls | Where-Object { $_[0] -eq 'Put' })[0]
         [object]::ReferenceEquals($call[4],$options) | Should -BeTrue
+    }
+
+    It 'removes files by mask only when explicitly requested' {
+        Remove-ScpItem -Session $fake -RemotePath '/data/*.tmp' -UseFileMask -Confirm:$false | Out-Null
+        $fake.Calls[0][1] | Should -Be '/data/*.tmp'
+    }
+    It 'uploads with an explicit destination filename and source removal' {
+        Send-ScpItem -Session $fake -LocalPath $local -RemotePath '/upload' -DestinationFileName 'renamed.txt' -Remove | Out-Null
+        $call=@($fake.Calls | Where-Object { $_[0] -eq 'Put' })[0]
+        $call[2] | Should -Be '/upload/renamed.txt'
+        $call[3] | Should -BeTrue
+        { Send-ScpItem -Session $fake -LocalPath $local -RemotePath '/upload' -DestinationFileName '../bad.txt' } | Should -Throw '*single filename*'
+    }
+    It 'executes multiple commands and checks each result' {
+        @(Invoke-ScpCommand -Session $fake -Command @('first','second')).Count | Should -Be 2
     }
 
 }

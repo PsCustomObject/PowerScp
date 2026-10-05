@@ -1,5 +1,15 @@
 # PowerScp change history
 
+## 1.2.0 - 2026-10-05
+
+- Compare practical features against the WinSCP 6.3.6.0 Gallery package and document command mappings and deliberate differences.
+- Expose reusable session options, URL parsing, modern SSH host-key policies, secure key passphrases, client certificates and XML/raw session logging options.
+- Fix S3 TLS defaults and add bucket, region, temporary token, URL style and environment/profile credential parameters.
+- Add session retrieval/close, remote rename/file creation, permission and resume factories, synchronization comparison, and text content read/write commands.
+- Extend listing controls, literal metadata lookup, explicit upload/download filenames, move/copy Force and PassThru, command arrays and opt-in deletion masks.
+- Guard remote replacements, clean temporary files after failures and dispose downloaded content streams.
+- Expand offline regression tests and run the full tests directory in Windows CI.
+
 ## 1.1.0 - 2026-10-05
 
 - Support Windows PowerShell 5.1 and PowerShell 7 with matched WinSCP 6.5.7 assemblies.

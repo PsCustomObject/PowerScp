@@ -1,6 +1,6 @@
 ﻿@{
     RootModule = 'PowerScp.psm1'
-    ModuleVersion = '1.1.0'
+    ModuleVersion = '1.2.0'
     GUID = '3c42657a-e9fa-4358-a934-170727493e6c'
     Author = 'PsCustomObject - Daniele Catanesi'
     CompanyName = 'https://PsCustomObject.github.io'
@@ -29,6 +29,17 @@
         'Invoke-ScpCommand'
         'Sync-ScpDirectory'
         'Start-WinScpConsole'
+        'New-ScpSessionOptions'
+        'Get-ScpSession'
+        'Close-ScpSession'
+        'ConvertTo-ScpEscapedString'
+        'New-ScpItemPermission'
+        'New-ScpTransferResumeSupport'
+        'Rename-ScpItem'
+        'New-ScpItem'
+        'Get-ScpContent'
+        'Set-ScpContent'
+        'Compare-ScpDirectory'
     )
     CmdletsToExport = @()
     VariablesToExport = @()

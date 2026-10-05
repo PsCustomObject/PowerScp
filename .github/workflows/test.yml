@@ -21,4 +21,4 @@ jobs:
           }
           Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
           Import-Module Pester -RequiredVersion 5.7.1
-          Invoke-Pester ./tests/PowerScp.Tests.ps1 -CI -Output Detailed
+          Invoke-Pester ./tests -CI -Output Detailed
