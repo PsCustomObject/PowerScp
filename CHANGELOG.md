@@ -2,6 +2,8 @@
 
 ## 1.2.1 - 2026-10-05
 
+- Split public commands and private helpers into individual files, preserving the command interface and session lifecycle.
+
 - Treat rename destinations as exact names and reject existing directories.
 - Preserve forced replacement targets in sibling backups; restore on failure when safe, otherwise report recovery paths.
 - Reject directory-over-file replacement and directory sources for download renaming.

@@ -9,9 +9,21 @@ $root = Split-Path $PSScriptRoot -Parent
 $assembly = 'lib/WinSCPnet.dll'
 if ($PSEdition -eq 'Core') { $assembly = 'lib/netstandard2.0/WinSCPnet.dll' }
 Add-Type -Path (Join-Path $root $assembly) -ErrorAction Stop
-$results = @(foreach ($file in @('PowerScp.psm1','PowerScp.psd1')) {
-    Invoke-ScriptAnalyzer -Path (Join-Path $root $file)
-})
+$files = @(
+    Get-Item -LiteralPath (Join-Path $root 'PowerScp.psm1'), (Join-Path $root 'PowerScp.psd1')
+
+    foreach ($folder in @('Private', 'Public'))
+    {
+        Get-ChildItem -LiteralPath (Join-Path $root $folder) -Filter '*.ps1' -File
+    }
+)
+
+$results = @(
+    foreach ($file in $files)
+    {
+        Invoke-ScriptAnalyzer -Path $file.FullName
+    }
+)
 if ($results.Count) {
     $results | Format-Table RuleName,Severity,Line,Message -Wrap
     throw "Static analysis found $($results.Count) diagnostic(s)."

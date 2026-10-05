@@ -1,8 +1,48 @@
 # PowerScp
 
-PowerScp is a PowerShell module for transferring files and managing them on remote servers. It uses [WinSCP](https://winscp.net/) to handle SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3 connections.
+[![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207-5391FE?logo=powershell)](https://github.com/PowerShell/PowerShell)
+[![WinSCP](https://img.shields.io/badge/WinSCP-integrated-2E7D32)](https://winscp.net/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-The project started with a simple need: upload files to an SFTP server from PowerShell. It has since grown to cover downloads, directory listings, checksums, synchronization and other tasks that come up when writing transfer scripts.
+PowerScp is a PowerShell module for moving files reliably between local and remote systems. It uses [WinSCP](https://winscp.net/) to handle SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3 connections.
+
+This project started with a very practical problem: moving files to a remote server from PowerShell often turns into a pile of brittle copy/paste logic. PowerScp is built to make that workflow more predictable, reusable, and easier to reason about in real automation work.
+
+## Why it matters
+
+File transfer work is one of the most common places where automation breaks: mismatched paths, unclear sessions, weak validation, and fragile scripts that are difficult to maintain. PowerScp is designed to make those transfers more predictable, safer, and easier to trust in real operational work.
+
+## Why this project exists
+
+PowerScp exists to reduce the friction in one of the most common operational tasks: moving files between systems in a safe and repeatable way. Whether the job is a scheduled upload, a report handoff, a remote sync, or a file inventory, the goal is the same: make remote transfer scripting clearer, more controlled, and easier to trust.
+
+PowerScp is designed for operational environments where secure and controlled file transfer matters. It is built to support repeatable automation around remote file movement, validation, and synchronization, with explicit session handling and secure connection checks intended for real-world scripting workflows.
+
+## Portfolio highlights
+
+- PowerShell-first file transfer tooling for real automation workflows
+- support for SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3
+- explicit session setup, fingerprint validation and secure connection settings
+- remote listing, synchronization, content reads and file operations in one toolkit
+- practical operational focus rather than abstract plumbing
+
+## Use cases
+
+PowerScp is useful in the kind of work that comes up in administration, operations and automation projects:
+
+- uploading reports or generated files to a remote server
+- synchronizing a local folder with a remote directory
+- retrieving nightly exports or backup artifacts
+- validating remote content before processing it further
+- scripting secure file movement without rewriting raw WinSCP code each time
+
+## Project philosophy
+
+PowerScp values explicit connection settings, secure defaults, predictable behavior, and practical automation over clever abstractions. The goal is to make remote file work feel straightforward, reviewable, and dependable when it matters most.
+
+## Project status
+
+PowerScp is an active, practical PowerShell module built around real transfer workflows rather than abstract wrappers. It is designed to be useful in day-to-day automation and infrastructure work, while keeping connection behavior explicit and easy to review.
 
 ## What you need
 
@@ -11,6 +51,35 @@ PowerScp supports Windows PowerShell 5.1 and PowerShell 7 on Windows. WinSCP sti
 WinSCP 6.5.7 is included in the repository. The module loads the .NET Framework assembly in Windows PowerShell and the .NET Standard assembly in PowerShell 7. There is no separate WinSCP installation step when using this checkout.
 
 If you update WinSCP yourself, keep the executable and both assemblies on the same version, then restart PowerShell. The [WinSCP installation documentation](https://winscp.net/eng/docs/library_install) explains the two assembly builds. Details about the bundled files and their licenses are in [bin/README.md](bin/README.md).
+
+## Documentation map
+
+- [CHANGELOG.md](./CHANGELOG.md)
+- [docs/TESTING.md](./docs/TESTING.md)
+- [docs/REVIEW.md](./docs/REVIEW.md)
+- [docs/FEATURE-COMPARISON.md](./docs/FEATURE-COMPARISON.md)
+- [bin/README.md](./bin/README.md)
+
+## Help wanted
+
+PowerScp is a practical project and there is room for useful contributions. If you have experience with PowerShell automation, SFTP or other transfer workflows, or test automation around remote systems, I would welcome help with:
+
+- improving documentation and examples
+- testing transfer scenarios on different platforms and protocols
+- validating edge cases around connection handling and file synchronization
+- reviewing edge conditions and reliability improvements
+
+If you are interested in helping, please open an issue or start a discussion with a short description of the scenario you want to test or improve.
+
+## At a glance
+
+| Focus area | What it covers |
+| --- | --- |
+| Connection handling | SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3 sessions |
+| File operations | upload, download, rename, copy, move and delete |
+| Remote discovery | directory listings, metadata checks and path validation |
+| Synchronization | compare and sync local/remote folders |
+| Operational safety | explicit session cleanup, fingerprints, and secure defaults |
 
 ## Getting started
 
@@ -226,6 +295,12 @@ Version 1.1 requires PowerShell 5.1 or later. It also changes a few defaults and
 Version 1.2 adds the commands and connection settings described above. Move/copy now requires `Force` to replace an existing file. S3 uses TLS by default, and FTP options are validated against the selected protocol.
 
 The [code review notes](docs/REVIEW.md) describe the earlier fixes. The [feature comparison](docs/FEATURE-COMPARISON.md) maps PowerScp to the WinSCP Gallery module and explains the features chosen for 1.2.
+
+## Module organization
+
+Each exported command has its own file in `Public/`. Internal helpers live in `Private/`. `PowerScp.psm1` loads the WinSCP assembly, manages session cleanup and loads the function files. The manifest keeps the explicit list of exported commands.
+
+When working on a command, edit its function file. Keep shared implementation details in `Private/`, and add a command to the manifest only when it should be part of the public interface.
 
 ## Running the tests
 
