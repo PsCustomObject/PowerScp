@@ -5,3 +5,4 @@ PowerScp.psproj
 *BIO-TCATA*
 Test-Module.ps1
 /testResults.xml
+.DS_Store
