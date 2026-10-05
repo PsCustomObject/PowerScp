@@ -1,4 +1,4 @@
-BeforeDiscovery { Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) 'PowerScp.psd1') -Force -ErrorAction Stop }
+﻿BeforeDiscovery { Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) 'PowerScp.psd1') -Force -ErrorAction Stop }
 BeforeAll {
     $script:root = Split-Path $PSScriptRoot -Parent
     Import-Module (Join-Path $root 'PowerScp.psd1') -Force -ErrorAction Stop
@@ -6,7 +6,7 @@ BeforeAll {
 Describe 'Public module contract' {
     It 'imports the manifest and exports only public commands' {
         $manifest = Test-ModuleManifest (Join-Path $root 'PowerScp.psd1') -ErrorAction Stop
-        $manifest.Version | Should -Be '1.2.0'
+        $manifest.Version | Should -Be '1.2.1'
         @(Get-Command -Module PowerScp).Count | Should -Be 31
         Get-Command Assert-ScpSession -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }
@@ -97,11 +97,8 @@ Describe 'Connection options' {
 # function bodies. Public type binding is covered above with the real assembly.
 Describe 'Transfer and enumeration regressions' {
     BeforeAll {
-        $source = Get-Content (Join-Path $root 'PowerScp.psm1') -Raw
-        $source = $source.Substring($source.IndexOf('function Assert-ScpPlatform'))
-        $source = $source.Replace('[WinSCP.Session]','[object]')
-        $adapter = Join-Path $TestDrive 'PowerScpHarness.psm1'
-        Set-Content $adapter $source -Encoding utf8
+        . (Join-Path $PSScriptRoot 'Helpers/New-PowerScpTestAdapter.ps1')
+        $adapter = New-PowerScpTestAdapter -SourceRoot $root -Destination (Join-Path $TestDrive 'PowerScpHarness') -Name 'PowerScpHarness'
         Import-Module $adapter -Force
         function New-FakeSession {
             $fake = [pscustomobject]@{ Opened=$true; Calls=[collections.generic.list[object]]::new(); Items=@(); Exists=$true; Fail=$false }

@@ -1,8 +1,48 @@
 # PowerScp
 
-PowerScp is a PowerShell module for transferring files and managing them on remote servers. It uses [WinSCP](https://winscp.net/) to handle SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3 connections.
+[![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207-5391FE?logo=powershell)](https://github.com/PowerShell/PowerShell)
+[![WinSCP](https://img.shields.io/badge/WinSCP-integrated-2E7D32)](https://winscp.net/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-The project started with a simple need: upload files to an SFTP server from PowerShell. It has since grown to cover downloads, directory listings, checksums, synchronization and other tasks that come up when writing transfer scripts.
+PowerScp is a PowerShell module for moving files reliably between local and remote systems. It uses [WinSCP](https://winscp.net/) to handle SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3 connections.
+
+This project started with a very practical problem: moving files to a remote server from PowerShell often turns into a pile of brittle copy/paste logic. PowerScp is built to make that workflow more predictable, reusable, and easier to reason about in real automation work.
+
+## Why it matters
+
+File transfer work is one of the most common places where automation breaks: mismatched paths, unclear sessions, weak validation, and fragile scripts that are difficult to maintain. PowerScp is designed to make those transfers more predictable, safer, and easier to trust in real operational work.
+
+## Why this project exists
+
+PowerScp exists to reduce the friction in one of the most common operational tasks: moving files between systems in a safe and repeatable way. Whether the job is a scheduled upload, a report handoff, a remote sync, or a file inventory, the goal is the same: make remote transfer scripting clearer, more controlled, and easier to trust.
+
+PowerScp is designed for operational environments where secure and controlled file transfer matters. It is built to support repeatable automation around remote file movement, validation, and synchronization, with explicit session handling and secure connection checks intended for real-world scripting workflows.
+
+## Portfolio highlights
+
+- PowerShell-first file transfer tooling for real automation workflows
+- support for SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3
+- explicit session setup, fingerprint validation and secure connection settings
+- remote listing, synchronization, content reads and file operations in one toolkit
+- practical operational focus rather than abstract plumbing
+
+## Use cases
+
+PowerScp is useful in the kind of work that comes up in administration, operations and automation projects:
+
+- uploading reports or generated files to a remote server
+- synchronizing a local folder with a remote directory
+- retrieving nightly exports or backup artifacts
+- validating remote content before processing it further
+- scripting secure file movement without rewriting raw WinSCP code each time
+
+## Project philosophy
+
+PowerScp values explicit connection settings, secure defaults, predictable behavior, and practical automation over clever abstractions. The goal is to make remote file work feel straightforward, reviewable, and dependable when it matters most.
+
+## Project status
+
+PowerScp is an active, practical PowerShell module built around real transfer workflows rather than abstract wrappers. It is designed to be useful in day-to-day automation and infrastructure work, while keeping connection behavior explicit and easy to review.
 
 ## What you need
 
@@ -11,6 +51,35 @@ PowerScp supports Windows PowerShell 5.1 and PowerShell 7 on Windows. WinSCP sti
 WinSCP 6.5.7 is included in the repository. The module loads the .NET Framework assembly in Windows PowerShell and the .NET Standard assembly in PowerShell 7. There is no separate WinSCP installation step when using this checkout.
 
 If you update WinSCP yourself, keep the executable and both assemblies on the same version, then restart PowerShell. The [WinSCP installation documentation](https://winscp.net/eng/docs/library_install) explains the two assembly builds. Details about the bundled files and their licenses are in [bin/README.md](bin/README.md).
+
+## Documentation map
+
+- [CHANGELOG.md](./CHANGELOG.md)
+- [docs/TESTING.md](./docs/TESTING.md)
+- [docs/REVIEW.md](./docs/REVIEW.md)
+- [docs/FEATURE-COMPARISON.md](./docs/FEATURE-COMPARISON.md)
+- [bin/README.md](./bin/README.md)
+
+## Help wanted
+
+PowerScp is a practical project and there is room for useful contributions. If you have experience with PowerShell automation, SFTP or other transfer workflows, or test automation around remote systems, I would welcome help with:
+
+- improving documentation and examples
+- testing transfer scenarios on different platforms and protocols
+- validating edge cases around connection handling and file synchronization
+- reviewing edge conditions and reliability improvements
+
+If you are interested in helping, please open an issue or start a discussion with a short description of the scenario you want to test or improve.
+
+## At a glance
+
+| Focus area | What it covers |
+| --- | --- |
+| Connection handling | SFTP, SCP, FTP, FTPS, WebDAV, WebDAVS and S3 sessions |
+| File operations | upload, download, rename, copy, move and delete |
+| Remote discovery | directory listings, metadata checks and path validation |
+| Synchronization | compare and sync local/remote folders |
+| Operational safety | explicit session cleanup, fingerprints, and secure defaults |
 
 ## Getting started
 
@@ -51,7 +120,7 @@ Closing the session in a `finally` block releases its resources even when an ope
 
 Uploading a directory keeps its folder structure. If you use `-TransferFilesOnly`, the module collects files from the entire directory tree and puts them directly into the destination directory. It rejects duplicate filenames before uploading, since flattening those files would cause them to overwrite one another.
 
-`Receive-ScpItem` downloads files into an existing local directory. Its remote paths can use WinSCP file masks, such as `/outgoing/*.csv`. Add `-LiteralPath` when a filename contains mask characters. To rename one file during transfer, use `-DestinationFileName`; downloads also require `-LiteralPath` for this option.
+`Receive-ScpItem` downloads files into an existing local directory. Its remote paths can use WinSCP file masks, such as `/outgoing/*.csv`. Add `-LiteralPath` when a filename contains mask characters. To rename one file during transfer, use `-DestinationFileName`; downloads also require `-LiteralPath` for this option, a remote file source and a valid Windows destination filename.
 
 Uploads and downloads keep the source files by default. Use `-Remove` when you deliberately want to delete each source after a successful transfer.
 
@@ -116,7 +185,7 @@ $session = $options | New-ScpSession -Name 'archive'
 Get-ScpSession -Name 'archive'
 ```
 
-A name helps when you have several connections open. Names are local to this module instance, and reimporting the module clears its session list. Keep the session reference and close it in `finally` as in the first example. `Remove-ScpSession` disposes it and removes it from the list. `Close-ScpSession` closes the connection while leaving the object available for an explicit `$session.Open($options)` later.
+A name helps when you have several connections open. Names are local to this module instance. Removing or force-reimporting the module disposes tracked sessions and clears its list. Keep the session reference and close it in `finally` as in the first example. `Remove-ScpSession` disposes it and removes it from the list. `Close-ScpSession` closes the connection while leaving the object available for an explicit `$session.Open($options)` later.
 
 `New-ScpSessionOptions` also accepts `-SessionUrl`, for example `ftpes://user@example.org:2121/`. Pass credentials separately rather than putting passwords into URLs. `-SshHostKeyPolicy AcceptNew` offers WinSCP's trust-on-first-use behavior; strict fingerprint checking remains the default. Use `-SecurePrivateKeyPassphrase` for a SecureString key or client-certificate passphrase, and `-TlsClientCertificatePath` for a client certificate.
 
@@ -171,9 +240,9 @@ New-ScpItem -Session $session -RemotePath '/config/settings.json' -Value $json -
 Rename-ScpItem -Session $session -RemotePath '/incoming/report.tmp' -NewName 'report.csv'
 ```
 
-`Set-ScpContent` replaces a file's text. It writes UTF-8 without a byte order mark by default and does not add a newline. `Get-ScpContent` returns lines, or the whole file with `-Raw`. Reading uses WinSCP streaming, which supports SFTP and FTP/FTPS only. Creation and content writes use regular transfers and also work with other protocols supported by the server. File parents must already exist.
+`Set-ScpContent` replaces a file's text. It writes UTF-8 without a byte order mark by default and does not add a newline. Content writes require Binary transfer mode, Overwrite mode and no FileMask. `Get-ScpContent` returns lines, or the whole file with `-Raw`. Reading uses WinSCP streaming, which supports SFTP and FTP/FTPS only. Creation and content writes use regular transfers and also work with other protocols supported by the server. File parents must already exist.
 
-Move, copy and rename refuse to overwrite an existing item unless you pass `-Force`. Force replaces files only; it will not delete an existing destination directory. Replacement removes the old target before the operation, so it is not atomic. Use `-PassThru` to retrieve the resulting metadata.
+Move, copy and rename refuse to overwrite an existing item unless you pass `-Force`. Force replaces files only; it will not delete an existing destination directory. Forced replacement moves the old target to a unique sibling backup before the operation. If replacement fails and the destination is absent, the original is restored. If a partial target exists or restoration fails, the error reports the retained backup path for manual recovery. Successful replacement removes the backup; a cleanup failure emits a warning with its path. This is not atomic, requires rename/delete permissions, and does not lock out other clients. Rename treats the new name as an exact destination and rejects an existing directory. Use `-PassThru` to retrieve the resulting metadata.
 
 ### Permissions and resumable uploads
 
@@ -227,6 +296,12 @@ Version 1.2 adds the commands and connection settings described above. Move/copy
 
 The [code review notes](docs/REVIEW.md) describe the earlier fixes. The [feature comparison](docs/FEATURE-COMPARISON.md) maps PowerScp to the WinSCP Gallery module and explains the features chosen for 1.2.
 
+## Module organization
+
+Each exported command has its own file in `Public/`. Internal helpers live in `Private/`. `PowerScp.psm1` loads the WinSCP assembly, manages session cleanup and loads the function files. The manifest keeps the explicit list of exported commands.
+
+When working on a command, edit its function file. Keep shared implementation details in `Private/`, and add a command to the manifest only when it should be part of the public interface.
+
 ## Running the tests
 
 The test suite uses Pester 5.7.1:
@@ -239,3 +314,5 @@ Invoke-Pester ./tests -CI
 The tests check module loading, connection settings, transfer options and operation behavior. They use the real WinSCP assemblies, with simulated sessions for operations that would otherwise need a server. Since WinSCP's session class cannot be mocked directly, those tests use a temporary copy of the module with the session type annotations removed.
 
 The Windows CI workflow runs the tests in Windows PowerShell 5.1 and the runner's installed PowerShell 7. Local verification has been performed on PowerShell 7.6.6 on macOS. Windows CI and live transfers have not yet been verified for this revision, so testing against your own servers is still needed before a production release.
+
+Static analysis and opt-in live SFTP verification are described in [docs/TESTING.md](docs/TESTING.md).
